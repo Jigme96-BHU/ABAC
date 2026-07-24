@@ -1,0 +1,17 @@
+node_modules/
+.next/
+out/
+build/
+.DS_Store
+*.pem
+.env
+.env*.local
+next-env.d.ts
+*.tsbuildinfo
+.vercel
+
+# Raw downloads scraped from the old WordPress site. Kept locally as an
+# archive, but not committed: everything the site actually uses already lives
+# in public/, and assets/ additionally holds a 47 MB unused intro video that
+# git would keep in history forever.
+assets/
