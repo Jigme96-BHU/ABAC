@@ -25,7 +25,7 @@ const RULES: { match: string[]; answer: string }[] = [
   {
     match: ["fee", "cost", "much", "price"],
     answer:
-      "Membership is an annual fee based on type — single $20, couple $25, family $35 — shown at checkout and paid by card when you register.",
+      "Membership is $20 per year for each adult (18 and over). Children under 18 join free. The total is shown at checkout and paid by card when you register.",
   },
   {
     match: ["join", "register", "member"],
@@ -34,8 +34,7 @@ const RULES: { match: string[]; answer: string }[] = [
   },
   {
     match: ["event"],
-    answer:
-      "The next event is the Losar community picnic on 15 August at Weston Park. See the Events page for the monthly calendar.",
+    answer: "See the Events page for what's coming up, plus photos from past gatherings.",
   },
   {
     match: ["status", "check", "expir"],

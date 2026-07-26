@@ -13,7 +13,7 @@ export default function ServicesPage() {
       <section className="block">
         <div className="wrap">
           <div className="form-card">
-            <span className="dz-eyebrow">ཞབས་ཏོག་ཞུ་བ</span>
+            <span className="dz-eyebrow">ཞབས་ཏོག་གི་དོན་ལུ་ཞུ་བ།</span>
             <h2>Service request</h2>
             <p className="form-sub">
               Support services — welfare assistance, embassy liaison, travel-document help —
@@ -41,11 +41,11 @@ export default function ServicesPage() {
             </ul>
 
             <div style={{ display: "flex", gap: 10, marginTop: 18, flexWrap: "wrap" }}>
-              <a className="btn btn-primary" href="mailto:bhutancanberra@gmail.com">
+              <Link className="btn btn-primary" href="/contact">
                 Email the committee
-              </a>
+              </Link>
               <Link className="btn btn-ghost" href="/join">
-                About membership
+                Become a member
               </Link>
             </div>
           </div>

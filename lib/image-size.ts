@@ -13,7 +13,13 @@ export function imageSize(file: string): Size | null {
   } catch {
     return null;
   }
+  return imageSizeFromBuffer(buf);
+}
 
+/** Same as imageSize(), but for bytes already in memory — e.g. a file
+ *  uploaded through a form, which never touches disk before going to
+ *  Supabase Storage. */
+export function imageSizeFromBuffer(buf: Buffer): Size | null {
   // PNG: IHDR width/height at bytes 16..24
   if (buf.length > 24 && buf.readUInt32BE(0) === 0x89504e47) {
     return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };

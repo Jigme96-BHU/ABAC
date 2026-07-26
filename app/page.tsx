@@ -1,24 +1,44 @@
 import Link from "next/link";
 import Image from "next/image";
 import logo from "@/public/img/logo/abac-logo.png";
-import { STORIES } from "@/content/stories";
-import { EVENTS } from "@/content/events";
+import heroBg from "@/public/img/hero/community.jpg";
+import { fromRow } from "@/content/events";
+import { createClient } from "@/lib/supabase/server";
+import { getAllStories } from "@/lib/get-stories";
+import type { EventRow as DBEventRow } from "@/lib/supabase/types";
 import StoryCard from "@/components/StoryCard";
 import EventRow from "@/components/EventRow";
 import RoyalPortrait from "@/components/RoyalPortrait";
 
-export default function HomePage() {
-  const latest = STORIES.slice(0, 3);
-  const upcoming = EVENTS.slice(0, 3);
+export default async function HomePage() {
+  const allStories = await getAllStories();
+  const latest = allStories.slice(0, 4);
+
+  const supabase = await createClient();
+  const today = new Date().toISOString().slice(0, 10);
+  const { data: upcomingRows } = await supabase
+    .from("events")
+    .select("*")
+    .eq("published", true)
+    .gte("date", today)
+    .order("date", { ascending: true })
+    .limit(4)
+    .returns<DBEventRow[]>();
+  const upcoming = (upcomingRows ?? []).map(fromRow);
 
   return (
     <main>
       <RoyalPortrait />
 
       <div className="hero">
+        {/* Community backdrop — the ACT Bhutanese community at the National Day
+            celebration, darkened behind a navy scrim so the text stays legible.
+            Decorative, so alt="" and it's excluded from the accessibility tree. */}
+        <Image src={heroBg} alt="" fill sizes="100vw" className="hero-bg" placeholder="blur" priority />
+        <div className="hero-scrim" />
         <div className="wrap" style={{ position: "relative" }}>
           <div className="hero-inner">
-            <span className="dz-eyebrow">འབྲུག་མི་སེར་ ཀེན་བྷེ་ར</span>
+            <span className="dz-eyebrow">༄༅། ཨུས་ཊེ་ལི་ཡ་དང་འབྲུག་མཐུན་འབྲེལ་ཚོགས་པ་ཀེན་བེ་ར།</span>
             <div className="royal-sub">AUSTRALIA–BHUTAN ASSOCIATION OF CANBERRA</div>
             <h1>One community, far from home, close together.</h1>
             <p>
@@ -45,7 +65,7 @@ export default function HomePage() {
 
       <section className="block" id="about">
         <div className="wrap" style={{ maxWidth: 760 }}>
-          <span className="dz-eyebrow">ང་བཅས་ཀྱི་སྐོར</span>
+          <span className="dz-eyebrow">ང་བཅས་ཀྱི་སྐོར།</span>
           <h2 style={{ fontSize: "clamp(24px,3.4vw,32px)", marginBottom: 16 }}>About us</h2>
           <p style={{ marginBottom: 14 }}>
             The Australia–Bhutan Association of Canberra is an incorporated community
@@ -66,6 +86,34 @@ export default function HomePage() {
       </section>
 
       <section className="block alt">
+        <div className="wrap">
+          <div
+            className="section-head"
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "end",
+              flexWrap: "wrap",
+              gap: 12,
+            }}
+          >
+            <div>
+              <span className="dz-eyebrow">ལོ་རྒྱུས་དང་གནད་དོན་གཙོ་ཅན།</span>
+              <h2>Stories and highlights</h2>
+            </div>
+            <Link className="btn btn-ghost btn-sm" href="/events">
+              See all events
+            </Link>
+          </div>
+          <div className="story-grid">
+            {latest.map((s) => (
+              <StoryCard key={s.slug} story={s} />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="block">
         <div className="wrap">
           <div className="section-head">
             <span className="dz-eyebrow">ཞབས་ཏོག</span>
@@ -100,32 +148,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="block">
-        <div className="wrap">
-          <div
-            className="section-head"
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "end",
-              flexWrap: "wrap",
-              gap: 12,
-            }}
-          >
-            <div>
-              <span className="dz-eyebrow">ལས་རིམ</span>
-              <h2>Upcoming events</h2>
-            </div>
-            <Link className="btn btn-ghost btn-sm" href="/events">
-              Full calendar
-            </Link>
-          </div>
-          {upcoming.map((e) => (
-            <EventRow key={e.id} event={e} />
-          ))}
-        </div>
-      </section>
-
       <section className="block alt">
         <div className="wrap">
           <div
@@ -139,18 +161,20 @@ export default function HomePage() {
             }}
           >
             <div>
-              <span className="dz-eyebrow">གཏམ་རྒྱུད</span>
-              <h2>Stories and highlights</h2>
+              <span className="dz-eyebrow">ལས་རིམ།</span>
+              <h2>Upcoming events</h2>
             </div>
-            <Link className="btn btn-ghost btn-sm" href="/stories">
-              All stories
+            <Link className="btn btn-ghost btn-sm" href="/events">
+              Full calendar
             </Link>
           </div>
-          <div className="story-grid">
-            {latest.map((s) => (
-              <StoryCard key={s.slug} story={s} />
-            ))}
-          </div>
+          {upcoming.length === 0 ? (
+            <p style={{ color: "var(--ink-soft)" }}>
+              No upcoming events posted yet — check back soon.
+            </p>
+          ) : (
+            upcoming.map((e) => <EventRow key={e.id} event={e} />)
+          )}
         </div>
       </section>
 
@@ -159,7 +183,7 @@ export default function HomePage() {
           <div className="cta-band">
             <div>
               <span className="dz-eyebrow" style={{ color: "var(--gold-bright)" }}>
-                འཐུས་མི
+                འཐུས་མི་མཛད་གནང་།
               </span>
               <h2>Become a member</h2>
               <p>
@@ -185,7 +209,7 @@ export default function HomePage() {
         >
           <div className="card" style={{ background: "var(--gd-deep)", border: "none", color: "#fff" }}>
             <span className="dz-eyebrow" style={{ color: "var(--gold-bright)" }}>
-              ཕན་བདེ
+              མི་སྡེ་ལུ་ཞལ་འདེབས།
             </span>
             <h3 style={{ color: "#fff", fontSize: 22 }}>Support the community</h3>
             <p style={{ color: "#E6DDC4", margin: "10px 0 18px" }}>
@@ -197,7 +221,7 @@ export default function HomePage() {
             </Link>
           </div>
           <div className="card">
-            <span className="dz-eyebrow">དྲི་བ</span>
+            <span className="dz-eyebrow">དྲི་བ།</span>
             <h3 style={{ fontSize: 22 }}>Questions? Ask in Dzongkha or English</h3>
             <p style={{ margin: "10px 0 18px" }}>
               Our chatbot answers common questions about joining, fees, and events — tap the

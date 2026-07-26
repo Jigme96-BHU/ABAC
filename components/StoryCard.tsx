@@ -1,6 +1,8 @@
+import path from "node:path";
 import Link from "next/link";
 import Image from "next/image";
 import type { Story } from "@/content/stories";
+import { imageSize } from "@/lib/image-size";
 
 const MONTHS = [
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -13,22 +15,32 @@ export function storyDate(iso: string) {
 }
 
 export default function StoryCard({ story }: { story: Story }) {
+  // Real intrinsic size, so the whole photo shows uncropped at its natural
+  // aspect ratio instead of a fixed-height crop. Admin-added stories (photo
+  // hosted in Supabase Storage) already carry their dimensions; the static
+  // WordPress-migrated ones are read from the local file on demand.
+  const dim =
+    story.imageWidth && story.imageHeight
+      ? { width: story.imageWidth, height: story.imageHeight }
+      : story.image?.startsWith("/")
+        ? imageSize(path.join(process.cwd(), "public", story.image))
+        : null;
+
   return (
     <Link
-      href={`/stories/${story.slug}`}
+      href={`/events/${story.slug}`}
       className="story-card"
       style={{ textDecoration: "none", color: "inherit", display: "block" }}
     >
-      {story.image ? (
-        <div className="story-img" style={{ position: "relative", padding: 0 }}>
-          <Image
-            src={story.image}
-            alt=""
-            fill
-            sizes="(max-width: 700px) 100vw, 340px"
-            style={{ objectFit: "cover" }}
-          />
-        </div>
+      {story.image && dim ? (
+        <Image
+          src={story.image}
+          alt=""
+          width={dim.width}
+          height={dim.height}
+          sizes="(max-width: 700px) 100vw, 360px"
+          style={{ width: "100%", height: "auto", display: "block" }}
+        />
       ) : (
         <div className="story-img" style={{ background: "var(--gd)" }}>
           ༄

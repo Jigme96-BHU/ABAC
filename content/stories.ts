@@ -6,6 +6,10 @@ export type Story = {
   title: string;
   date: string;
   image: string | null;
+  /** Only set for Storage-hosted images (admin-added stories) — StoryCard
+   *  falls back to reading the file directly for local /img/stories paths. */
+  imageWidth?: number;
+  imageHeight?: number;
   excerpt: string;
   body: string[];
 };

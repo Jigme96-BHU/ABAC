@@ -1,15 +1,8 @@
-/** ⚠️ PLACEHOLDER DATA — NOT REAL ABAC EVENTS.
- *
- *  Every entry below was invented for the design prototype. The live
- *  WordPress site has no structured events feed to migrate from, so these
- *  carry over unchanged purely so the calendar and event rows have something
- *  to lay out.
- *
- *  Nothing here has been confirmed by the committee. Do not publish this page
- *  until the real dates, venues and fees replace these. Phase 3 moves this
- *  table into Supabase so the committee edits it in the browser.
- */
+import type { EventRow } from "@/lib/supabase/types";
 
+/** Public-site shape for an event — what EventRow/EventCalendar render.
+ *  Close to the database row (lib/supabase/types.ts) but uses `undefined`
+ *  instead of `null` for optional fields, which is friendlier in JSX. */
 export type ABACEvent = {
   id: string;
   title: string;
@@ -21,55 +14,18 @@ export type ABACEvent = {
   cta: "rsvp" | "volunteer" | null;
 };
 
-export const PLACEHOLDER_EVENTS = true;
-
-export const EVENTS: ABACEvent[] = [
-  {
-    id: "losar-picnic",
-    title: "Losar community picnic",
-    date: "2026-08-15",
-    time: "11 am – 3 pm",
-    location: "Weston Park, Yarralumla",
-    note: "Bring a plate to share",
-    access: "open",
-    cta: "rsvp",
-  },
-  {
-    id: "youth-leadership",
-    title: "Youth leadership workshop",
-    date: "2026-08-29",
-    location: "Gungahlin Library",
-    note: "Ages 15–25",
-    access: "members",
-    cta: null,
-  },
-  {
-    id: "dzongkha-term-4",
-    title: "Dzongkha class — term 4 start",
-    date: "2026-09-05",
-    time: "Saturdays 10 am",
-    location: "Belconnen Community Centre",
-    access: "members",
-    cta: null,
-  },
-  {
-    id: "blessed-rainy-day",
-    title: "Blessed Rainy Day gathering",
-    date: "2026-09-23",
-    location: "Venue to be announced",
-    access: "open",
-    cta: "rsvp",
-  },
-  {
-    id: "multicultural-festival",
-    title: "National Multicultural Festival stall",
-    date: "2027-02-27",
-    location: "Civic",
-    note: "Scan the stall QR code to join ABAC on the spot",
-    access: "open",
-    cta: "volunteer",
-  },
-];
+export function fromRow(row: EventRow): ABACEvent {
+  return {
+    id: row.id,
+    title: row.title,
+    date: row.date,
+    time: row.time ?? undefined,
+    location: row.location,
+    note: row.note ?? undefined,
+    access: row.access,
+    cta: row.cta,
+  };
+}
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -101,9 +57,11 @@ export function byMonth(events: ABACEvent[]) {
 }
 
 /** day-of-month numbers that have events, for the calendar dots */
-export function eventDays(year: number, month: number) {
-  return EVENTS.filter((e) => {
-    const p = parts(e.date);
-    return p.y === year && p.m === month;
-  }).map((e) => parts(e.date).d);
+export function eventDays(events: ABACEvent[], year: number, month: number) {
+  return events
+    .filter((e) => {
+      const p = parts(e.date);
+      return p.y === year && p.m === month;
+    })
+    .map((e) => parts(e.date).d);
 }

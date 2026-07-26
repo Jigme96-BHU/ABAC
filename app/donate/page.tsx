@@ -14,7 +14,7 @@ export default function DonatePage() {
       <section className="block">
         <div className="wrap">
           <div className="form-card">
-            <span className="dz-eyebrow">ཕན་བདེའི་ཞལ་འདེབས</span>
+            <span className="dz-eyebrow">ཕན་བདེའི་ཞལ་འདེབས།</span>
             <h2>Donate</h2>
             <p className="form-sub">
               Donations are separate from membership and fund welfare support and cultural

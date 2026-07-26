@@ -16,13 +16,10 @@ export default function SiteFooter() {
           <div>
             <div className="foot-brand">
               <Image src={logo} alt="ABAC crest" width={52} height={52} />
+              <h4 style={{ margin: 0 }}>ABAC</h4>
             </div>
-            <p style={{ fontSize: 13, lineHeight: 1.7 }}>
-              Australia–Bhutan Association of Canberra Inc.
-            </p>
-            <p className="dz-foot" style={{ marginTop: 10 }}>
-              བཀྲ་ཤིས་བདེ་ལེགས།
-            </p>
+            <p className="foot-brand-sub">Australia–Bhutan Association of Canberra Inc.</p>
+            <p className="foot-locale">Canberra · ACT</p>
           </div>
 
           <div>
@@ -34,8 +31,7 @@ export default function SiteFooter() {
 
           <div>
             <h4>Community</h4>
-            <Link href="/events">Events calendar</Link>
-            <Link href="/stories">Stories</Link>
+            <Link href="/events">Events &amp; highlights</Link>
             <Link href="/donate">Donate</Link>
             <Link href="/contact">Contact us</Link>
           </div>
@@ -94,6 +90,9 @@ export default function SiteFooter() {
                 </svg>
               </a>
             </div>
+            <p className="dz-foot" style={{ marginTop: 14 }}>
+              བཀྲ་ཤིས་བདེ་ལེགས།
+            </p>
           </div>
         </div>
 

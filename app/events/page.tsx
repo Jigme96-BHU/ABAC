@@ -1,46 +1,95 @@
 import type { Metadata } from "next";
-import { EVENTS, PLACEHOLDER_EVENTS, byMonth } from "@/content/events";
+import { fromRow, byMonth } from "@/content/events";
+import { createClient } from "@/lib/supabase/server";
+import { getAllStories } from "@/lib/get-stories";
+import type { EventRow as DBEventRow } from "@/lib/supabase/types";
 import EventCalendar from "@/components/EventCalendar";
 import EventRow from "@/components/EventRow";
-import PlaceholderNotice from "@/components/PlaceholderNotice";
+import StoryCard from "@/components/StoryCard";
+import EventsBanner from "@/components/EventsBanner";
 
 export const metadata: Metadata = {
   title: "Events",
   description:
-    "Browse ABAC community events in Canberra by month — cultural celebrations, Dzongkha classes, sports and festivals.",
+    "What's coming up in the ACT Bhutanese community, plus photos and write-ups from ABAC's recent celebrations and gatherings.",
 };
 
-export default function EventsPage() {
+export default async function EventsPage() {
+  const supabase = await createClient();
+  const today = new Date().toISOString().slice(0, 10);
+
+  const { data: rows } = await supabase
+    .from("events")
+    .select("*")
+    .eq("published", true)
+    .gte("date", today)
+    .order("date", { ascending: true })
+    .returns<DBEventRow[]>();
+
+  const upcoming = (rows ?? []).map(fromRow);
+  const groups = byMonth(upcoming);
+  const now = new Date();
+  const allStories = await getAllStories();
+
   return (
     <main>
+      <EventsBanner />
+
+      {/* Forward-looking: the calendar lives here, at the top, because it is
+          about what is coming up — not for browsing past write-ups. */}
       <section className="block">
-        <div className="wrap" style={{ maxWidth: 760 }}>
-          <span className="dz-eyebrow">ལས་རིམ</span>
-          <h2 style={{ fontSize: 32, marginBottom: 6 }}>Events calendar</h2>
-          <p style={{ color: "var(--ink-soft)", marginBottom: 28 }}>
-            Browse the calendar by month — highlighted dates have events. Member-only events
-            unlock when you sign in with an active membership.
+        <div className="wrap">
+          <p style={{ color: "var(--ink-soft)", marginBottom: 28, maxWidth: 640 }}>
+            What&apos;s coming up in the Canberra Bhutanese community — and, below, photos and
+            write-ups from events we&apos;ve already held.
           </p>
 
-          {PLACEHOLDER_EVENTS && (
-            <PlaceholderNotice>
-              These events were invented for the design mockup. Real dates and venues need to
-              come from the committee before this page goes live.
-            </PlaceholderNotice>
-          )}
+          <h3 style={{ fontSize: 20, marginBottom: 14 }}>Upcoming events</h3>
 
-          <EventCalendar startYear={2026} startMonth={7} />
+          <div className="events-layout">
+            <EventCalendar
+              events={upcoming}
+              startYear={now.getFullYear()}
+              startMonth={now.getMonth()}
+            />
 
-          {byMonth(EVENTS).map(([label, events]) => (
-            <div key={label}>
-              <p className="eyebrow-en" style={{ marginTop: 26 }}>
-                {label}
-              </p>
-              {events.map((e) => (
-                <EventRow key={e.id} event={e} detail />
-              ))}
+            <div>
+              {groups.length === 0 ? (
+                <p style={{ color: "var(--ink-soft)" }}>
+                  No upcoming events posted yet — check back soon, or follow ABAC on Facebook
+                  for the latest.
+                </p>
+              ) : (
+                groups.map(([label, events]) => (
+                  <div key={label} style={{ marginBottom: 6 }}>
+                    <p className="eyebrow-en" style={{ marginTop: 0, marginBottom: 10 }}>
+                      {label}
+                    </p>
+                    {events.map((e) => (
+                      <EventRow key={e.id} event={e} detail />
+                    ))}
+                  </div>
+                ))
+              )}
             </div>
-          ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Past events — the photo feed, matching the live site's
+          "Events and Announcements". Same real posts as Stories. */}
+      <section className="block alt">
+        <div className="wrap">
+          <span className="dz-eyebrow">ལོ་རྒྱུས་དང་གནད་དོན་གཙོ་ཅན།</span>
+          <h2 style={{ fontSize: 32, marginBottom: 6 }}>Past events &amp; highlights</h2>
+          <p style={{ color: "var(--ink-soft)", marginBottom: 28, maxWidth: 640 }}>
+            Photos and stories from our recent gatherings, celebrations, and milestones.
+          </p>
+          <div className="story-grid">
+            {allStories.map((s) => (
+              <StoryCard key={s.slug} story={s} />
+            ))}
+          </div>
         </div>
       </section>
     </main>

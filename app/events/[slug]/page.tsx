@@ -2,18 +2,18 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
-import { STORIES } from "@/content/stories";
+import { getAllStories } from "@/lib/get-stories";
 import { storyDate } from "@/components/StoryCard";
 
 type Props = { params: Promise<{ slug: string }> };
 
-export function generateStaticParams() {
-  return STORIES.map((s) => ({ slug: s.slug }));
-}
+// Stories now include admin-added ones from Supabase, which can appear at
+// any time — this route renders per-request rather than pre-generating a
+// fixed list at build time, so a new story is visible immediately.
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const story = STORIES.find((s) => s.slug === slug);
+  const story = (await getAllStories()).find((s) => s.slug === slug);
   if (!story) return {};
   return {
     title: story.title,
@@ -28,9 +28,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default async function StoryPage({ params }: Props) {
+export default async function EventStoryPage({ params }: Props) {
   const { slug } = await params;
-  const story = STORIES.find((s) => s.slug === slug);
+  const story = (await getAllStories()).find((s) => s.slug === slug);
   if (!story) notFound();
 
   return (
@@ -38,10 +38,10 @@ export default async function StoryPage({ params }: Props) {
       <section className="block">
         <div className="wrap" style={{ maxWidth: 760 }}>
           <Link
-            href="/stories"
+            href="/events"
             style={{ fontSize: 13.5, textDecoration: "none", color: "var(--ink-soft)" }}
           >
-            ‹ All stories
+            ‹ All events &amp; highlights
           </Link>
 
           <p className="eyebrow-en" style={{ marginTop: 18, marginBottom: 6 }}>
@@ -55,8 +55,8 @@ export default async function StoryPage({ params }: Props) {
             <Image
               src={story.image}
               alt=""
-              width={1000}
-              height={640}
+              width={story.imageWidth ?? 1000}
+              height={story.imageHeight ?? 640}
               sizes="(max-width: 800px) 100vw, 760px"
               style={{
                 width: "100%",

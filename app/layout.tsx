@@ -47,6 +47,11 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${cinzel.variable} ${albert.variable} ${tibetan.variable}`}
+      // Some browser extensions inject attributes onto <html> before React
+      // hydrates (e.g. password managers, ad blockers), which trips React's
+      // hydration-mismatch check even though nothing is actually wrong.
+      // This is the fix React's own docs recommend for exactly that case.
+      suppressHydrationWarning
     >
       <body>
         <SiteHeader />

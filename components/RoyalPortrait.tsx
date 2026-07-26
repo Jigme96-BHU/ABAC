@@ -38,44 +38,66 @@ function findPortrait() {
   return null;
 }
 
+/** One thangka-mount corner ornament: a layered gold bracket with a jewel,
+ *  drawn for the top-left and rotated by CSS to the other three corners. */
+function Corner({ position }: { position: "tl" | "tr" | "bl" | "br" }) {
+  return (
+    <svg className={`royal-corner ${position}`} viewBox="0 0 88 88" aria-hidden="true">
+      <g fill="none" stroke="currentColor">
+        <path d="M88 12 H30 C20 12 12 20 12 30 V88" strokeWidth="2" />
+        <path d="M88 19 H33 C25 19 19 25 19 33 V88" strokeWidth="1" opacity="0.45" />
+        <circle cx="12" cy="12" r="6.5" strokeWidth="1" opacity="0.5" />
+      </g>
+      <circle cx="12" cy="12" r="3" fill="currentColor" />
+    </svg>
+  );
+}
+
 export default function RoyalPortrait() {
   const portrait = findPortrait();
 
   return (
     <div className="royal-band">
-      <p className="royal-hon">མི་དབང་མངའ་བདག་རིན་པོ་ཆེ།</p>
+      <div className="royal-mount">
+        <Corner position="tl" />
+        <Corner position="tr" />
+        <Corner position="bl" />
+        <Corner position="br" />
 
-      <div className="royal-frame">
-        <div className="royal-frame-inner">
-          {portrait ? (
-            <Image
-              src={portrait.src}
-              alt="His Majesty King Jigme Khesar Namgyel Wangchuck, the Druk Gyalpo of Bhutan"
-              width={portrait.size.width}
-              height={portrait.size.height}
-              sizes="(max-width: 560px) 68vw, 280px"
-              priority
-            />
-          ) : (
-            <div className="royal-ph">
-              <span>☸</span>
-              PORTRAIT OF
-              <br />
-              HIS MAJESTY THE KING
-              <br />
-              OFFICIAL IMAGE HERE
-            </div>
-          )}
+        <p className="royal-hon">མི་དབང་མངའ་བདག་རིན་པོ་ཆེ།</p>
+
+        <div className="royal-frame">
+          <div className="royal-frame-inner">
+            {portrait ? (
+              <Image
+                src={portrait.src}
+                alt="His Majesty King Jigme Khesar Namgyel Wangchuck, the Druk Gyalpo of Bhutan"
+                width={portrait.size.width}
+                height={portrait.size.height}
+                sizes="(max-width: 560px) 68vw, 280px"
+                priority
+              />
+            ) : (
+              <div className="royal-ph">
+                <span>☸</span>
+                PORTRAIT OF
+                <br />
+                HIS MAJESTY THE KING
+                <br />
+                OFFICIAL IMAGE HERE
+              </div>
+            )}
+          </div>
         </div>
-      </div>
 
-      <div className="royal-rule">
-        <span />
-        <i>◆</i>
-        <span />
+        <div className="royal-rule">
+          <span />
+          <i>◆</i>
+          <span />
+        </div>
+        <p className="royal-cap">HIS MAJESTY KING JIGME KHESAR NAMGYEL WANGCHUCK</p>
+        <p className="royal-sub2">The Druk Gyalpo of Bhutan</p>
       </div>
-      <p className="royal-cap">HIS MAJESTY KING JIGME KHESAR NAMGYEL WANGCHUCK</p>
-      <p className="royal-sub2">The Druk Gyalpo of Bhutan</p>
     </div>
   );
 }

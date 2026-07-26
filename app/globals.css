@@ -25,7 +25,7 @@ header{position:sticky;top:0;z-index:50;background:rgba(251,249,242,.97);backdro
 .brand{display:flex;align-items:center;gap:11px;cursor:pointer;min-width:0}
 .brand img{width:46px;height:46px;border-radius:50%;flex:none}
 .brand-name{font-family:var(--font-cinzel),serif;font-size:17px;letter-spacing:.5px;white-space:nowrap}
-.brand-sub{font-family:var(--font-cinzel),serif;font-size:clamp(7px,.92vw,10px);letter-spacing:clamp(.6px,.28vw,2.4px);text-transform:uppercase;color:#A8821A;font-weight:600;white-space:nowrap;line-height:1.25}
+.brand-sub{font-family:var(--font-cinzel),serif;font-size:clamp(8.2px,1.08vw,11.8px);letter-spacing:clamp(.6px,.26vw,2.2px);text-transform:uppercase;color:#A8821A;font-weight:600;white-space:nowrap;line-height:1.25}
 .navlinks{display:flex;gap:22px;align-items:center}
 .navlinks a{font-size:14px;text-decoration:none;color:var(--ink);padding:4px 0;border-bottom:2px solid transparent;white-space:nowrap}
 .navlinks a.active{border-bottom-color:var(--gold);color:var(--gd-ink)}
@@ -46,9 +46,13 @@ header{position:sticky;top:0;z-index:50;background:rgba(251,249,242,.97);backdro
 .btn-sm{padding:8px 16px;font-size:13.5px;border-radius:7px}
 
 .hero{position:relative;overflow:hidden;background:var(--gd-deep);color:#fff}
-.hero::after{content:"";position:absolute;top:-40%;right:-18%;width:62%;height:180%;background:var(--gold);transform:rotate(18deg);opacity:.18}
+.hero-bg{object-fit:cover;object-position:center 34%;z-index:0}
+/* Navy scrim over the photo: strong enough that the light text keeps contrast,
+   with a touch more darkness top and bottom so the band edges stay defined. */
+.hero-scrim{position:absolute;inset:0;z-index:1;background:linear-gradient(180deg,rgba(11,26,44,.3) 0%,rgba(11,26,44,.18) 45%,rgba(11,26,44,.34) 100%)}
+.hero::after{content:"";position:absolute;top:-40%;right:-18%;width:62%;height:180%;background:var(--gold);transform:rotate(18deg);opacity:.14;z-index:1}
 .hero-inner{position:relative;z-index:1;padding:64px 0 76px;max-width:660px}
-.hero .dz-eyebrow{font-size:13px;color:var(--gold-bright);margin-bottom:2px}
+.hero .dz-eyebrow{font-size:13px;color:var(--gold-bright);margin-top:16px;margin-bottom:2px}
 .hero h1{font-size:clamp(30px,5vw,46px);color:#fff;margin-bottom:16px}
 .hero p{color:#E6DDC4;font-size:14px;margin-bottom:14px;max-width:520px;line-height:1.55}
 .hero-actions{display:flex;gap:12px;flex-wrap:wrap}
@@ -92,11 +96,33 @@ section.block.alt{background:#F4F0E4}
 .cal-nav button{width:32px;height:32px;border-radius:8px;border:1px solid var(--line);background:var(--card);font-size:15px;color:var(--gd-ink)}
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center}
 .cal-grid .dow{font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:var(--ink-soft);padding:4px 0}
-.cal-grid .day{font-size:13px;padding:7px 0;border-radius:8px;position:relative}
-.cal-grid .day.ev{background:var(--gd-soft);color:var(--gd-ink);font-weight:600}
+.cal-grid .day{font-size:13px;padding:7px 0;border-radius:8px;position:relative;border:none;background:none;font-family:inherit;color:inherit;width:100%}
+.cal-grid .day:disabled{cursor:default}
+.cal-grid .day.ev{background:var(--gd-soft);color:var(--gd-ink);font-weight:600;cursor:pointer}
 .cal-grid .day.ev::after{content:"";position:absolute;bottom:3px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:var(--orange)}
+.cal-grid .day.ev:hover{background:var(--gold);color:#3D2E05}
+.cal-grid .day.ev.sel{background:var(--gd-deep);color:#fff}
+.cal-grid .day.ev.sel::after{background:var(--gold-bright)}
 .cal-grid .day.blank{visibility:hidden}
 .cal-key{font-size:11.5px;color:var(--ink-soft);margin-top:10px}
+.cal-day-panel{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.cal-day-item{display:flex;gap:12px;align-items:baseline}
+.cal-day-item+.cal-day-item{margin-top:10px}
+.cal-day-item strong{font-size:14px}
+.cal-day-date{flex:none;font-family:var(--font-cinzel),serif;font-size:12.5px;color:var(--gd-ink);min-width:52px}
+/* Events page: calendar beside the upcoming-events list; stacks on mobile. */
+.events-layout{display:grid;grid-template-columns:minmax(280px,360px) 1fr;gap:28px;align-items:start}
+.events-layout .cal{margin-bottom:0}
+@media(max-width:760px){.events-layout{grid-template-columns:1fr;gap:20px}}
+
+/* Photo-collage banner at the top of the Events page */
+.events-banner{position:relative;overflow:hidden;background:var(--gd-deep);height:clamp(300px,42vw,460px)}
+.events-banner-grid{position:absolute;inset:0;display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(2,1fr);gap:2px;background:var(--gd-deep)}
+.events-banner-tile{position:relative}
+.events-banner-scrim{position:absolute;inset:0;z-index:1;background:linear-gradient(180deg,rgba(11,26,44,.55) 0%,rgba(11,26,44,.4) 55%,rgba(11,26,44,.62) 100%)}
+.events-banner-content{position:relative;z-index:2;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:6px}
+.events-banner-content h1{font-family:var(--font-cinzel),serif;font-size:clamp(32px,6vw,52px);color:#fff;letter-spacing:2px;text-transform:uppercase;text-shadow:0 2px 16px rgba(0,0,0,.5)}
+@media(max-width:560px){.events-banner-grid{grid-template-columns:repeat(3,1fr)}}
 
 .story-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px}
 .story-card{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
@@ -108,7 +134,7 @@ section.block.alt{background:#F4F0E4}
 
 .team-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:18px}
 .person{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px 18px;text-align:center}
-.avatar{width:88px;height:88px;border-radius:50%;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;font-family:var(--font-cinzel),serif;font-size:26px;color:#fff;position:relative}
+.avatar{width:88px;height:88px;border-radius:50%;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;font-family:var(--font-cinzel),serif;font-size:26px;color:#fff;position:relative;overflow:hidden}
 .avatar .cam{position:absolute;bottom:0;right:0;width:26px;height:26px;border-radius:50%;background:#fff;border:1px solid var(--line);font-size:13px;display:flex;align-items:center;justify-content:center}
 .person h3{font-size:17px}
 .person .role{font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--orange-ink);margin:4px 0 8px}
@@ -152,6 +178,10 @@ footer .fine{border-top:1px solid rgba(255,255,255,.15);padding-top:20px;font-si
 .dz-foot{font-family:var(--dz);color:var(--gold-bright);font-size:15px}
 .foot-brand{display:flex;gap:12px;align-items:center;margin-bottom:12px}
 .foot-brand img{width:52px;height:52px;border-radius:50%;background:#fff}
+/* footer brand: matches the header treatment */
+.foot-brand img{width:46px;height:46px}
+.foot-brand-sub{font-family:var(--font-cinzel),serif;font-size:9px;letter-spacing:1.1px;text-transform:uppercase;color:var(--gold);font-weight:600;line-height:1.6;display:block;margin-top:14px}
+.foot-locale{font-family:var(--font-cinzel),serif;font-size:9px;letter-spacing:1.1px;text-transform:uppercase;color:#C7BC9C;font-weight:600;line-height:1.6;margin-top:8px}
 
 .chat-fab{position:fixed;bottom:22px;right:22px;z-index:80;width:56px;height:56px;border-radius:50%;background:var(--gd-deep);color:#fff;border:none;font-size:23px;box-shadow:0 6px 18px rgba(14,35,56,.5)}
 .chat-panel{position:fixed;bottom:90px;right:22px;z-index:80;width:min(340px,calc(100vw - 32px));background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 12px 34px rgba(33,40,50,.2);display:none;flex-direction:column}
@@ -185,7 +215,10 @@ h1,h2,h3{letter-spacing:.5px}
 .orn span:last-child{background:linear-gradient(270deg,transparent,var(--gold))}
 .orn i{font-style:normal;color:var(--gold);font-size:10px}
 .royal-sub{font-family:var(--font-cinzel),serif;color:var(--gold-bright);font-size:clamp(8.5px,1.55vw,12px);letter-spacing:clamp(1px,.42vw,3px);margin:8px 0 6px;white-space:nowrap}
-.hero .wrap{border:1px solid rgba(201,162,39,.55);outline:1px solid rgba(201,162,39,.22);outline-offset:6px;border-radius:4px;margin:18px auto;display:flex;flex-direction:column;align-items:center;max-width:1000px}
+.hero .wrap{position:relative;z-index:2;margin:18px auto;display:flex;flex-direction:column;align-items:center;max-width:1000px}
+/* No framed panel now, so the text sits directly on the photo — a soft shadow
+   keeps it legible over any bright patch of the image without darkening it. */
+.hero-inner :is(h1,p,.royal-sub,.dz-eyebrow){text-shadow:0 1px 12px rgba(8,20,35,.62)}
 .hero-inner{text-align:center;padding:2px 0 24px;max-width:700px}
 .hero-inner p{margin-left:auto;margin-right:auto}
 .hero-actions{justify-content:center}
@@ -197,7 +230,7 @@ h1,h2,h3{letter-spacing:.5px}
 footer,.site-footer{border-top:4px double var(--gold)}
 .event-date .d{font-family:var(--font-cinzel),serif}
 .card{border-color:#E0D8BF}
-@media(max-width:560px){.hero .wrap{margin:20px 12px;outline-offset:4px}.royal-sub{letter-spacing:1px}}
+@media(max-width:560px){.hero .wrap{margin:20px 12px;outline-offset:4px}.royal-sub{letter-spacing:1px}.royal-mount{padding:32px 18px 26px;margin:0 8px}.royal-corner{width:26px;height:26px}}
 
 /* ---- Connect / social icons ---- */
 .social-row{display:flex;gap:10px;margin-top:6px;flex-wrap:wrap}
@@ -213,11 +246,35 @@ footer,.site-footer{border-top:4px double var(--gold)}
 @media(max-width:560px){.prez{width:64px;height:64px;font-size:17px}}
 
 /* ---- royal band (place of honour, top of home) ---- */
-.royal-band{background:#0A1B2E;border-bottom:3px double var(--gold);padding:26px 16px 20px;text-align:center}
-.royal-frame{display:inline-block;border:1px solid var(--gold);padding:3px;border-radius:3px;box-shadow:0 8px 26px rgba(0,0,0,.4)}
-.royal-frame-inner{border:1px solid rgba(201,162,39,.4);padding:3px;border-radius:2px}
-.royal-frame img{display:block;width:min(280px,68vw);height:auto;border-radius:1px}
-.royal-ph{width:min(280px,68vw);aspect-ratio:3/4;height:auto;background:linear-gradient(180deg,#132C46,#0E2338);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:#8FA5B8;font-size:9.5px;letter-spacing:2px;line-height:1.7}
+/* Cream "gallery wall" with a thangka-style ornamental mount. A warm pool of
+   light at top-centre falls behind the portrait so it reads as lit, not
+   floating; the layered gold mount + corner ornaments give the thangka frame. */
+.royal-band{
+  background:
+    radial-gradient(58% 52% at 50% 26%, #FFFEFA 0%, rgba(255,254,250,0) 72%),
+    linear-gradient(180deg, var(--paper) 0%, #F1E9D3 100%);
+  border-bottom:3px double var(--gold);
+  padding:42px 16px 36px;
+  text-align:center;
+}
+.royal-mount{
+  position:relative;
+  max-width:600px;
+  margin:0 auto;
+  padding:44px 32px 34px;
+  border:1.5px solid rgba(201,162,39,.7);
+  box-shadow:inset 0 0 0 5px transparent, inset 0 0 0 6px rgba(201,162,39,.28);
+  border-radius:2px;
+}
+.royal-corner{position:absolute;width:34px;height:34px;color:var(--gold)}
+.royal-corner.tl{top:-2px;left:-2px}
+.royal-corner.tr{top:-2px;right:-2px;transform:scaleX(-1)}
+.royal-corner.bl{bottom:-2px;left:-2px;transform:scaleY(-1)}
+.royal-corner.br{bottom:-2px;right:-2px;transform:scale(-1,-1)}
+.royal-frame{display:inline-block;position:relative;border:2px solid var(--gold);padding:6px;background:linear-gradient(#FFFDF7,#F3ECD9);border-radius:2px;box-shadow:0 18px 38px -12px rgba(120,90,20,.42),0 4px 12px rgba(0,0,0,.12)}
+.royal-frame-inner{border:1px solid rgba(201,162,39,.55);border-radius:1px;overflow:hidden;line-height:0}
+.royal-frame img{display:block;width:min(280px,64vw);height:auto}
+.royal-ph{width:min(280px,64vw);aspect-ratio:3/4;height:auto;background:linear-gradient(180deg,#FBF6E8,#F0E6CC);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:#9A7A1E;font-size:9.5px;letter-spacing:2px;line-height:1.7}
 .royal-ph span{color:var(--gold);font-size:24px;letter-spacing:0}
 .royal-rule{display:flex;align-items:center;gap:8px;justify-content:center;margin-top:10px}
 .royal-rule i{font-style:normal;color:var(--gold);font-size:8px}
@@ -225,9 +282,9 @@ footer,.site-footer{border-top:4px double var(--gold)}
 .royal-rule span:last-child{background:linear-gradient(270deg,transparent,var(--gold))}
 
 /* ---- royal band captions + slim hero buttons ---- */
-.royal-hon{font-family:var(--dz);color:var(--gold-bright);font-size:15px;margin:0 0 12px}
-.royal-cap{font-family:var(--font-cinzel),serif;color:#fff;font-size:14px;letter-spacing:1.5px;margin:10px 0 0}
-.royal-sub2{color:#8FA5B8;font-size:11.5px;margin:3px 0 0}
+.royal-hon{font-family:var(--dz);color:#9A7A1E;font-size:15px;margin:0 0 18px}
+.royal-cap{font-family:var(--font-cinzel),serif;color:var(--gd-deep);font-size:14px;letter-spacing:1.5px;margin:14px 0 0}
+.royal-sub2{color:var(--ink-soft);font-size:11.5px;margin:4px 0 0}
 .hero-actions .btn{padding:9px 22px;font-size:13.5px;border-radius:7px}
 
 @media(max-width:560px){.brand img{width:38px;height:38px}.brand-sub{font-size:6.5px;letter-spacing:.4px}.brand-name{font-size:15px}}
