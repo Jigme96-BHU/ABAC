@@ -94,16 +94,78 @@ The site must not replace the live WordPress one until all of these are done.
       2026-07-26; if you already ran an older copy, you must run this one
       again, the same "run it again is safe" logic used elsewhere does not
       cover this specific kind of change.
+- [ ] **Run the membership-renewals migration** (`0007_membership_renewals.sql`).
+      This makes membership numbers permanent: future renewals match the
+      existing member by date of birth + CID, extend `expires_at`, and send a
+      renewal email instead of creating a second membership number.
+- [ ] **Run the expiry-reminders migration** (`0008_membership_expiry_reminders.sql`).
+      This adds the database fields/functions for automated reminder emails:
+      one 14 days before expiry and one on the expiry date.
+- [ ] **Run the family-membership migration** (`0009_family_membership.sql`,
+      requires `0007` and `0008` above). Adds the **Family Membership**
+      category from the 2026 Membership Policy: parent(s) + dependent
+      children under 18 for a flat **$30/year** (vs $20/year Single), each
+      adult individually recorded with their own DOB/CID and own confirmation
+      email. `/join` now offers both categories side by side.
+- [ ] **Run the documents migration** (`0010_documents.sql`, requires `0001`).
+      Adds the **Policies & Documents** library: a "Documents" tab in
+      `/admin` for uploading PDF/DOC/DOCX files (Constitution, Membership
+      Policy, financial reports, minutes), and a public `/documents` page
+      (linked from the footer) grouping published documents by category for
+      viewing/downloading.
+- [ ] **Run the volunteers migration** (`0011_volunteers.sql`, requires
+      `0001`). Adds a public `/volunteers` registration form (Name, Sex,
+      CID, DOB, phone, email — plus parent/guardian name, phone, email, and
+      a consent checkbox when the volunteer is under 18), linked from the
+      footer above Donate. Submissions are admin-only (same private-data
+      model as `members`, not publicly readable) and appear in a new
+      "Volunteers" tab in `/admin`, including a CSV export.
+- [ ] **Run the corporate membership migration** (`0012_corporate_membership.sql`,
+      requires `0001`). Adds **Corporate Membership** (Diamond / Platinum /
+      Gold) — `/join` now leads with a Community vs Corporate choice, the
+      existing Single/Family flow sits under Community unchanged. Corporate
+      applications are **not** self-serve: they land as `pending` in a new
+      "Corporate" tab in `/admin` for the committee to approve/reject (the
+      committee also gets an email notification at each application), an
+      approval emails the applicant a Stripe payment link, and only Stripe
+      confirming payment (via the webhook) activates the membership and
+      sends the full congratulatory welcome email. Approved/active partners
+      get a logo the admin uploads/removes in that same tab, shown on the
+      new public `/partners` ("Our Partners") page, grouped by tier.
+      **Tier fees are placeholders** ($200/$500/$1,000 for Gold/Platinum/
+      Diamond) — search `CORPORATE_TIER_FEES_CENTS` in `lib/corporate-tiers.ts`
+      once the committee confirms real amounts. Tier benefits shown on the
+      public form are also drafts pending committee sign-off (see
+      `components/CorporateForm.tsx`'s `TIER_BENEFITS`).
+- [ ] **Run the service requests migration** (`0013_service_requests.sql`,
+      requires `0001`). Adds paid **Letter of Residency** and **Character
+      Reference** requests to `/services`, replacing the old "not available
+      yet, contact us" stub. Requesters upload a passport (required) plus
+      optional visa/license/proof-of-residency, pay **$10** via Stripe, and
+      only get a confirmation email once payment actually clears (same
+      webhook pattern as membership/corporate). This is the most sensitive
+      data in the app — the `service-documents` Storage bucket is **private**
+      (unlike every other bucket in this project), so admins can only view
+      uploaded documents via a short-lived signed URL from the new
+      "Services" tab in `/admin`, never a public link.
+- [ ] **Set up the daily expiry-reminder cron job.** Add a production
+      `CRON_SECRET`. `vercel.json` already schedules a daily production call
+      to `/api/members/expiry-reminders`; Vercel sends
+      `Authorization: Bearer <CRON_SECRET>` automatically. If the site is
+      hosted somewhere else, schedule the same daily GET request with that
+      header. Once per day is enough; the database records which reminders
+      were already sent.
 - [ ] **Post the real upcoming events** via `/admin` once signed in. Only a
       test event exists so far ("Jigme Tharchen Made this event for test",
       2026-07-26) — delete it before launch. There is no more placeholder
       data to replace — the fake Losar picnic / Dzongkha class / Multicultural
       Festival entries from the design mockup are gone entirely, not hidden
       behind a warning.
-- [x] **Membership fees confirmed** by the committee 2026-07-26: **$20 per
-      adult per year, free under 18.** `app/join/actions.ts` and
-      `app/join/page.tsx` both hard-code `2000` cents / `$20` — search for
-      that if the fee ever changes.
+- [x] **Membership fees confirmed** by the committee 2026-07-26 and the 2026
+      Membership Policy: **$20 Single adult per year, free Single under 18,
+      and $30 Family per year.** `app/join/actions.ts` and `app/join/page.tsx`
+      hard-code `2000` cents / `$20` and `3000` cents / `$30` — search for
+      those if the fees ever change.
 - [ ] **Switch Stripe from sandbox (test mode) to Live mode** before
       accepting real payments — see the accounts table above. Test mode
       cards never move real money; this is genuinely required before
@@ -175,19 +237,21 @@ manually going forward.
 Stripe Live mode (see launch blockers). `/join` is a real form now: a
 `members` table (strict RLS — no public read, PII stays admin-only),
 age-computed fee ($20 adults, free under 18), Stripe Checkout for the paid
-case, and `/join/success` that checks real payment status via a narrow RPC
-rather than trusting the redirect. Membership only ever activates from the
-`checkout.session.completed` **webhook** (`app/api/stripe/webhook`), via
-another SECURITY DEFINER function (`activate_membership`) — same pattern as
-`is_admin()`, so no service-role key is needed anywhere in the app. Each
-membership gets an auto-assigned number (`ABAC-<year>-<6 digits>`, never
-client-chosen) shown on `/join/success`. "Check my status" on `/join` looks
-membership up by email + date of birth (no login, matching the original
-design) — deliberately returns only status/number/expiry, never CID, phone,
-or suburb, since email+DOB isn't strong authentication. A welcome email
-(name + membership number, via Gmail SMTP) sends once a membership actually
-activates — from the webhook for paid members, immediately for free
-under-18 ones.
+case, renewals keep the original membership number, and `/join/success`
+checks real payment status via a narrow RPC rather than trusting the redirect.
+Membership only ever activates from the `checkout.session.completed`
+**webhook** (`app/api/stripe/webhook`), via SECURITY DEFINER functions —
+same pattern as `is_admin()`, so no service-role key is needed anywhere in
+the app. Each membership gets an auto-assigned permanent number
+(`ABAC-<first-active-year>-<6 digits>`, never client-chosen) shown on
+`/join/success`. "Check my status" on `/join` looks membership up by email +
+date of birth (no login, matching the original design) — deliberately returns
+only status/number/expiry, never CID, phone, or suburb, since email+DOB isn't
+strong authentication. A welcome or renewal email (name + membership number,
+via Gmail SMTP) sends once a membership actually activates — from the webhook
+for paid members, immediately for free under-18 ones. A daily protected cron
+route (`/api/members/expiry-reminders`) sends expiry reminders 14 days before
+expiry and again on the expiry date.
 
 **Found and fixed 2026-07-26, before anyone had actually completed a
 registration:** the join flow's own database calls violated the RLS it

@@ -32,7 +32,7 @@ export type StoryRow = {
 };
 
 /** Shape of a row from the `members` table (supabase/migrations/0003_members.sql,
- *  0004_member_number.sql). */
+ *  0004_member_number.sql, 0009_family_membership.sql). */
 export type MemberRow = {
   id: string;
   email: string;
@@ -46,8 +46,87 @@ export type MemberRow = {
   status: "pending" | "active" | "expired";
   stripe_checkout_session_id: string | null;
   member_no: number;
+  household_id: string | null;
+  membership_type: "single" | "family";
+  is_dependent: boolean;
   joined_at: string | null;
   expires_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Shape of a row from the `volunteers` table (supabase/migrations/0011_volunteers.sql). */
+export type VolunteerRow = {
+  id: string;
+  name: string;
+  sex: string;
+  date_of_birth: string; // yyyy-mm-dd
+  cid: string;
+  phone: string;
+  email: string;
+  is_minor: boolean;
+  guardian_name: string | null;
+  guardian_phone: string | null;
+  guardian_email: string | null;
+  guardian_consent: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Shape of a row from the `corporate_members` table (supabase/migrations/0012_corporate_membership.sql). */
+export type CorporateMemberRow = {
+  id: string;
+  business_name: string;
+  abn: string | null;
+  website: string | null;
+  contact_name: string;
+  contact_role: string | null;
+  email: string;
+  phone: string;
+  address: string | null;
+  notes: string | null;
+  tier: "diamond" | "platinum" | "gold";
+  status: "pending" | "approved" | "active" | "rejected";
+  stripe_checkout_session_id: string | null;
+  fee_cents: number | null;
+  logo_path: string | null; // admin-managed public Storage URL
+  joined_at: string | null;
+  expires_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Shape of a row from the `service_requests` table (supabase/migrations/0013_service_requests.sql).
+ *  All *_path fields are private Storage paths, not public URLs — view them
+ *  via a signed URL (see app/admin/actions.ts's getServiceDocumentUrl). */
+export type ServiceRequestRow = {
+  id: string;
+  service_type: "letter_of_residency" | "character_reference";
+  requester_name: string;
+  email: string;
+  phone: string;
+  passport_path: string;
+  visa_path: string | null;
+  license_path: string | null;
+  proof_of_residency_path: string | null;
+  notes: string | null;
+  fee_cents: number;
+  status: "pending" | "active";
+  stripe_checkout_session_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Shape of a row from the `documents` table (supabase/migrations/0010_documents.sql). */
+export type DocumentRow = {
+  id: string;
+  title: string;
+  description: string | null;
+  category: string;
+  file_path: string; // public Storage URL, not a local /public path
+  file_name: string; // original filename, shown/used for the download
+  file_size: number | null; // bytes
+  published: boolean;
   created_at: string;
   updated_at: string;
 };

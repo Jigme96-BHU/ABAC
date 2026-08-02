@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { formatMemberNo } from "@/lib/member-number";
@@ -36,16 +37,45 @@ export default async function JoinSuccessPage({ searchParams }: Props) {
       p_session_id: session_id ?? null,
       p_member_id: member_id ?? null,
     })
-    .returns<{ status: string; member_no: number; member_year: number }[]>()
-    .maybeSingle();
+    .returns<{ status: string; member_no: number; member_year: number; name: string }[]>();
 
-  if (data?.status === "active") {
-    const memberNo = formatMemberNo(data.member_no, data.member_year);
+  const rows: { status: string; member_no: number; member_year: number; name: string }[] = Array.isArray(data)
+    ? data
+    : [];
+
+  if (rows.length > 0 && rows.every((r) => r.status === "active")) {
+    if (rows.length === 1) {
+      const memberNo = formatMemberNo(rows[0].member_no, rows[0].member_year);
+      return (
+        <Notice
+          title="Welcome to ABAC!"
+          body={`Welcome! Your annual membership is now active. Your membership number is ${memberNo}. We’ve sent a confirmation to your email and please save it for your records.`}
+        />
+      );
+    }
+
     return (
       <Notice
         title="Welcome to ABAC!"
-        body={`Your membership is active for the next year. Your membership number is ${memberNo} — keep it for your records.`}
-      />
+        body="Welcome! Your family membership is now active. We've sent each adult a confirmation email — please save it for your records."
+      >
+        <table className="hist-table" style={{ marginTop: 16, textAlign: "left" }}>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th style={{ textAlign: "right" }}>Membership number</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.member_no}>
+                <td>{r.name}</td>
+                <td style={{ textAlign: "right" }}>{formatMemberNo(r.member_no, r.member_year)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Notice>
     );
   }
 
@@ -60,7 +90,17 @@ export default async function JoinSuccessPage({ searchParams }: Props) {
   );
 }
 
-function Notice({ title, body, warn = false }: { title: string; body: string; warn?: boolean }) {
+function Notice({
+  title,
+  body,
+  warn = false,
+  children,
+}: {
+  title: string;
+  body: string;
+  warn?: boolean;
+  children?: ReactNode;
+}) {
   return (
     <main>
       <section className="block">
@@ -70,6 +110,7 @@ function Notice({ title, body, warn = false }: { title: string; body: string; wa
             <p className={warn ? "notice warn" : "notice ok"} style={{ marginTop: 16 }}>
               {body}
             </p>
+            {children}
             <Link className="btn btn-ghost" style={{ marginTop: 20 }} href="/">
               Back to home
             </Link>

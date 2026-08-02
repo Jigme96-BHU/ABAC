@@ -10,7 +10,6 @@ import logo from "@/public/img/logo/abac-logo.png";
 export default function SiteHeader() {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [lang, setLang] = useState<"en" | "dz">("en");
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
@@ -39,21 +38,6 @@ export default function SiteHeader() {
         </nav>
 
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <button
-            className="lang-toggle"
-            onClick={() => setLang(lang === "en" ? "dz" : "en")}
-            aria-label="Switch language"
-          >
-            {lang === "en" ? (
-              <>
-                <b>EN</b> | རྫོང་ཁ
-              </>
-            ) : (
-              <>
-                EN | <b>རྫོང་ཁ</b>
-              </>
-            )}
-          </button>
           <button
             className="hamburger"
             onClick={() => setMenuOpen((o) => !o)}
