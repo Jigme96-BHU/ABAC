@@ -32,6 +32,8 @@ export default function SiteFooter() {
           <div>
             <h4>Community</h4>
             <Link href="/events">Events &amp; highlights</Link>
+            <Link href="/volunteers">Volunteer registration</Link>
+            <Link href="/partners">Our Partners</Link>
             <Link href="/donate">Donate</Link>
             <Link href="/contact">Contact us</Link>
           </div>
@@ -41,6 +43,7 @@ export default function SiteFooter() {
             <Link href="/#about">About us</Link>
             <Link href="/team">Our team</Link>
             <Link href="/privacy">Privacy statement</Link>
+            <Link href="/documents">Policies &amp; Documents</Link>
             <Link href="/admin">Committee sign-in</Link>
           </div>
 

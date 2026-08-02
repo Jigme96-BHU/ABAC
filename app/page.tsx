@@ -42,9 +42,9 @@ export default async function HomePage() {
             <div className="royal-sub">AUSTRALIA–BHUTAN ASSOCIATION OF CANBERRA</div>
             <h1>One community, far from home, close together.</h1>
             <p>
-              The Australia–Bhutan Association of Canberra connects Bhutanese families
-              across the ACT — culture, language, support, and celebration, in English and
-              Dzongkha.
+              The Australia–Bhutan Association of Canberra connects Bhutanese families and
+              multicultural communities across the ACT through cultural heritage, language,
+              support, and celebration.
             </p>
             <div className="orn">
               <span />
@@ -68,17 +68,65 @@ export default async function HomePage() {
           <span className="dz-eyebrow">ང་བཅས་ཀྱི་སྐོར།</span>
           <h2 style={{ fontSize: "clamp(24px,3.4vw,32px)", marginBottom: 16 }}>About us</h2>
           <p style={{ marginBottom: 14 }}>
-            The Australia–Bhutan Association of Canberra is an incorporated community
-            association serving Bhutanese families, students, and friends of Bhutan across
-            the ACT. We are guided by the values of <em>lay-ju-dey</em> (gratitude) and{" "}
-            <em>tha-dam-tse</em> (loyalty and integrity).
+            The Australia–Bhutan Association of Canberra Incorporated is a registered
+            community organisation dedicated to supporting Bhutanese families, students, and
+            friends of Bhutan throughout the Australian Capital Territory (ACT). The
+            Association operates under the foundational principles of <em>lay-ju-drey</em>{" "}
+            (the law of karmic cause and effect) and <em>tha-dam-tse</em> (unwavering
+            loyalty, trust, and moral integrity).
           </p>
           <p style={{ marginBottom: 20 }}>
-            The association runs cultural celebrations, Dzongkha language programs for
-            children, youth leadership initiatives, and a welfare support service for
-            members facing hardship — alongside representing the community at Canberra&apos;s
-            multicultural events.
+            To foster cultural preservation and social cohesion, the Association delivers
+            national and cultural celebrations, youth leadership initiatives, and educational
+            programming for children. It also provides welfare support for community members
+            experiencing hardship, while actively representing Bhutanese heritage at
+            Canberra&apos;s premier multicultural events.
           </p>
+          <div className="pay-box" style={{ marginTop: 24, marginBottom: 22 }}>
+            <div className="pay-head">
+              <strong>Our constitutional objects</strong>
+            </div>
+            <p style={{ margin: "10px 0 14px", color: "var(--ink-soft)" }}>
+              ABAC is governed by its approved constitution and exists to advance five
+              public community purposes:
+            </p>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))",
+                gap: 10,
+              }}
+            >
+              {[
+                "Unity and mutual understanding",
+                "Multicultural participation",
+                "Community welfare",
+                "Cultural heritage",
+                "Interstate collaboration",
+              ].map((item) => (
+                <div
+                  key={item}
+                  style={{
+                    border: "1px solid var(--line)",
+                    borderRadius: 8,
+                    padding: "10px 12px",
+                    background: "#FFFEF9",
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: "var(--gd-ink)",
+                  }}
+                >
+                  {item}
+                </div>
+              ))}
+            </div>
+            <p style={{ margin: "14px 0 0", color: "var(--ink-soft)", fontSize: 13 }}>
+              In practical terms, this means building a respectful community, supporting
+              members in times of need, preserving Bhutanese spiritual and cultural
+              heritage, and strengthening ABAC&apos;s relationship with the Royal Bhutanese
+              Embassy, Bhutanese organisations, and the wider ACT community.
+            </p>
+          </div>
           <Link className="btn btn-ghost btn-sm" href="/team">
             Meet the team
           </Link>
@@ -122,26 +170,54 @@ export default async function HomePage() {
           <div className="grid3">
             <div className="card">
               <div className="ic">☸</div>
-              <h3>Community support</h3>
+              <h3>Community &amp; welfare support</h3>
               <p>
-                Welfare assistance, embassy liaison help, and travel-document support when
-                your family needs it.
+                Mutual support during settlement, illness, bereavement, and emergencies,
+                including embassy liaison and help for newly arrived families connecting with
+                local services.
               </p>
             </div>
             <div className="card">
               <div className="ic">༄</div>
-              <h3>Culture and language</h3>
+              <h3>Culture, language &amp; heritage</h3>
               <p>
-                Dzongkha classes for children, Losar and Blessed Rainy Day celebrations, and
-                traditional arts workshops.
+                Promotes Dzongkha language learning, Losar and Blessed Rainy Day
+                celebrations, traditional arts, and support for the Bhutanese Buddhist &amp;
+                Cultural Centre.
               </p>
             </div>
             <div className="card">
               <div className="ic">འ</div>
-              <h3>Member events</h3>
+              <h3>Events &amp; member activities</h3>
               <p>
-                Member-only gatherings, picnics, and programs across Canberra — RSVP in one
-                tap from the events calendar.
+                Cultural, social, sporting, and educational events, plus member-only programs
+                and gatherings across Canberra — RSVP straight from the events calendar.
+              </p>
+            </div>
+            <div className="card">
+              <div className="ic">⚖</div>
+              <h3>A voice in the association</h3>
+              <p>
+                Attend and vote at Annual General Meetings, stand for elected office where
+                eligible, and receive notices and reports on ABAC&apos;s governance and
+                activities.
+              </p>
+            </div>
+            <div className="card">
+              <div className="ic">✦</div>
+              <h3>Leadership &amp; volunteering</h3>
+              <p>
+                Leadership and professional-development initiatives, hands-on volunteering
+                with committees and working groups, and recognition for outstanding service to
+                the community.
+              </p>
+            </div>
+            <div className="card">
+              <div className="ic">⚭</div>
+              <h3>A fair, connected community</h3>
+              <p>
+                Networking with fellow members, and a guarantee of fair, respectful treatment
+                and procedural fairness in every matter affecting your membership.
               </p>
             </div>
           </div>

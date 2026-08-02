@@ -3,7 +3,14 @@ import { createClient } from "@/lib/supabase/server";
 import LoginForm from "@/components/admin/LoginForm";
 import SignOutButton from "@/components/admin/SignOutButton";
 import AdminTabs from "@/components/admin/AdminTabs";
-import type { EventRow, StoryRow } from "@/lib/supabase/types";
+import type {
+  EventRow,
+  StoryRow,
+  DocumentRow,
+  VolunteerRow,
+  CorporateMemberRow,
+  ServiceRequestRow,
+} from "@/lib/supabase/types";
 
 export const metadata: Metadata = {
   title: "Committee sign-in",
@@ -26,7 +33,7 @@ export default async function AdminPage() {
         <section className="block">
           <div className="wrap">
             <div className="form-card">
-              <span className="dz-eyebrow">འཛིན་སྐྱོང</span>
+              <span className="dz-eyebrow">འཛིན་སྐྱོང་།</span>
               <h2>Committee sign-in</h2>
               <p className="form-sub">
                 Enter your committee email and we&apos;ll send you a one-time sign-in link — no
@@ -62,9 +69,36 @@ export default async function AdminPage() {
     );
   }
 
-  const [{ data: events }, { data: stories }] = await Promise.all([
+  const [
+    { data: events },
+    { data: stories },
+    { data: documents },
+    { data: volunteers },
+    { data: corporateMembers },
+    { data: serviceRequests },
+  ] = await Promise.all([
     supabase.from("events").select("*").order("date", { ascending: true }).returns<EventRow[]>(),
     supabase.from("stories").select("*").order("date", { ascending: false }).returns<StoryRow[]>(),
+    supabase
+      .from("documents")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .returns<DocumentRow[]>(),
+    supabase
+      .from("volunteers")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .returns<VolunteerRow[]>(),
+    supabase
+      .from("corporate_members")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .returns<CorporateMemberRow[]>(),
+    supabase
+      .from("service_requests")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .returns<ServiceRequestRow[]>(),
   ]);
 
   return (
@@ -82,13 +116,20 @@ export default async function AdminPage() {
             }}
           >
             <div>
-              <span className="dz-eyebrow">འཛིན་སྐྱོང</span>
+              <span className="dz-eyebrow">འཛིན་སྐྱོང་།</span>
               <h2 style={{ marginBottom: 4 }}>Admin</h2>
               <p style={{ color: "var(--ink-soft)", fontSize: 14 }}>Signed in as {user.email}</p>
             </div>
             <SignOutButton />
           </div>
-          <AdminTabs events={events ?? []} stories={stories ?? []} />
+          <AdminTabs
+            events={events ?? []}
+            stories={stories ?? []}
+            documents={documents ?? []}
+            volunteers={volunteers ?? []}
+            corporateMembers={corporateMembers ?? []}
+            serviceRequests={serviceRequests ?? []}
+          />
         </div>
       </section>
     </main>

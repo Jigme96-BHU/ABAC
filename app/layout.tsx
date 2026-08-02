@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { Cinzel, Albert_Sans, Noto_Serif_Tibetan } from "next/font/google";
+import { Cinzel, Albert_Sans } from "next/font/google";
+import localFont from "next/font/local";
 import SiteHeader from "@/components/SiteHeader";
 import SiteFooter from "@/components/SiteFooter";
 import ChatWidget from "@/components/ChatWidget";
@@ -19,8 +20,18 @@ const albert = Albert_Sans({
   display: "swap",
 });
 
-const tibetan = Noto_Serif_Tibetan({
-  weight: ["400", "500"],
+// Self-hosted instead of next/font/google's Noto_Serif_Tibetan: Google's
+// unicode-range split for this font still shipped a 730KB Tibetan-block
+// file even with `subsets: ["tibetan"]` set — Next's `subsets` option
+// doesn't actually gate what next/font/google fetches for this font (the
+// unrequested latin/latin-ext files came along too). This file is
+// pyftsubset'd down to just the ~54 Tibetan codepoints this site actually
+// renders (every dz-eyebrow/dz-foot string, and the chatbot's Dzongkha
+// answers), keeping OpenType shaping tables intact: 730KB -> 172KB, with
+// the variable weight axis preserved so 400/500 both still work.
+const tibetan = localFont({
+  src: "./fonts/NotoSerifTibetan-subset.woff2",
+  weight: "400 500",
   variable: "--font-tibetan",
   display: "swap",
 });

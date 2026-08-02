@@ -15,12 +15,13 @@ const initials = (name: string) =>
 
 export default function FormerPresidents({ people }: { people: FormerPresident[] }) {
   const [selected, setSelected] = useState<number | null>(null);
-  const current = selected === null ? null : people[selected];
+  const displayedPeople = [...people].reverse();
+  const current = selected === null ? null : displayedPeople[selected];
 
   return (
     <>
       <div className="prez-stack">
-        {people.map((p, i) => (
+        {displayedPeople.map((p, i) => (
           <button
             key={`${p.slug}-${p.tenure}`}
             className={selected === i ? "prez sel" : "prez"}
@@ -51,8 +52,10 @@ export default function FormerPresidents({ people }: { people: FormerPresident[]
         <div className="status-card" style={{ maxWidth: 380 }}>
           <h3 style={{ fontSize: 18 }}>{current.name}</h3>
           <p className="tenure" style={{ fontSize: 13, color: "var(--ink-soft)" }}>
-            {current.founder ? "Founder · President · " : "President · "}
-            {current.tenure}
+            {current.founder ? "Founder · " : ""}President
+          </p>
+          <p style={{ fontSize: 13, color: "var(--ink-soft)", marginTop: 4 }}>
+            Year: {current.tenure}
           </p>
         </div>
       )}
