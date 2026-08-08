@@ -15,7 +15,28 @@ export const SERVICE_TYPES: { value: ServiceType; label: string; description: st
   },
 ];
 
-export const SERVICE_FEE_CENTS = 1000; // $10 AUD flat, per service
+/** Per service. Which one applies is decided server-side from the membership
+ *  number — never from what the browser posted. */
+export const SERVICE_FEE_MEMBER_CENTS = 1000; // $10 AUD
+export const SERVICE_FEE_NON_MEMBER_CENTS = 4500; // $45 AUD
+
+export function serviceFeeCents(isMember: boolean): number {
+  return isMember ? SERVICE_FEE_MEMBER_CENTS : SERVICE_FEE_NON_MEMBER_CENTS;
+}
+
+/** "$10" / "$45" — whole dollars, both fees are round numbers. */
+export function formatServiceFee(cents: number): string {
+  return `$${(cents / 100).toFixed(0)}`;
+}
+
+/** Members type "ABAC-2026-000123" or just "123"; both mean member_no 123.
+ *  Returns null when there's no usable number in the input. */
+export function parseMemberNo(input: string): number | null {
+  const groups = input.match(/\d+/g);
+  if (!groups || groups.length === 0) return null;
+  const n = Number(groups[groups.length - 1]);
+  return Number.isSafeInteger(n) && n > 0 ? n : null;
+}
 
 export function serviceTypeLabel(serviceType: string): string {
   return SERVICE_TYPES.find((s) => s.value === serviceType)?.label ?? serviceType;

@@ -107,8 +107,10 @@ export type ServiceRequestRow = {
   phone: string;
   passport_path: string;
   visa_path: string | null;
-  license_path: string | null;
+  photo_id_path: string | null;
   proof_of_residency_path: string | null;
+  member_no: number | null;
+  is_member: boolean;
   notes: string | null;
   fee_cents: number;
   status: "pending" | "active";

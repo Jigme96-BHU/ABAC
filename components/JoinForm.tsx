@@ -9,15 +9,24 @@ export default function JoinForm() {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [category, setCategory] = useState<Category>("single");
-  const [hasAdult2, setHasAdult2] = useState(false);
+  const [extraAdults, setExtraAdults] = useState<string[]>([]);
   const [children, setChildren] = useState<string[]>([]);
 
   // Adult 1's own fields are shared by both categories, just posted under a
   // different form field name depending on which one the server action reads
   // (see app/join/actions.ts — the Single branch is untouched and still
-  // expects the plain "email"/"name"/etc. names it always has).
-  const field = (base: string) => (category === "family" ? `adult1_${base}` : base);
+  // expects the plain "email"/"name"/etc. names it always has). Under Family
+  // they post under the same repeated "adult_*" names as every other adult,
+  // so the action can read the whole household with formData.getAll() and the
+  // number of adults is unbounded.
+  const field = (base: string) => (category === "family" ? `adult_${base}` : base);
 
+  function addAdult() {
+    setExtraAdults((a) => [...a, crypto.randomUUID()]);
+  }
+  function removeAdult(key: string) {
+    setExtraAdults((a) => a.filter((k) => k !== key));
+  }
   function addChild() {
     setChildren((c) => [...c, crypto.randomUUID()]);
   }
@@ -51,7 +60,7 @@ export default function JoinForm() {
             onChange={() => setCategory("single")}
           />
           <span>
-            <strong>Single</strong> — $20/yr adult, free under 18
+            <strong>Single</strong> — $20 Annually per adult, free under 18
           </span>
         </label>
         <label className="category-option">
@@ -63,7 +72,7 @@ export default function JoinForm() {
             onChange={() => setCategory("family")}
           />
           <span>
-            <strong>Family</strong> — $30/yr flat
+            <strong>Family</strong> — $30 Annually
           </span>
         </label>
       </div>
@@ -137,28 +146,25 @@ export default function JoinForm() {
 
       {category === "family" && (
         <>
-          <label className="consent" style={{ marginTop: 20 }}>
-            <input
-              type="checkbox"
-              checked={hasAdult2}
-              onChange={(e) => setHasAdult2(e.target.checked)}
-            />
-            Add a spouse or partner (Adult 2)
-          </label>
+          {extraAdults.map((key, i) => (
+            <div key={key} className="household-block">
+              <div className="household-block-head">
+                <strong>Adult {i + 2}</strong>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => removeAdult(key)}
+                >
+                  Remove
+                </button>
+              </div>
 
-          {hasAdult2 && (
-            <div style={{ marginTop: 4 }}>
-              <label className="f" htmlFor="j-a2-email">
-                Adult 2 — Email
-              </label>
-              <input id="j-a2-email" name="adult2_email" type="email" required placeholder="name@email.com" />
+              <label className="f">Email</label>
+              <input name="adult_email" type="email" required placeholder="name@email.com" />
 
-              <label className="f" htmlFor="j-a2-name">
-                Adult 2 — Name
-              </label>
+              <label className="f">Name</label>
               <input
-                id="j-a2-name"
-                name="adult2_name"
+                name="adult_name"
                 type="text"
                 required
                 placeholder="Full name as on their Citizenship ID"
@@ -166,10 +172,8 @@ export default function JoinForm() {
 
               <div className="two">
                 <div>
-                  <label className="f" htmlFor="j-a2-gender">
-                    Sex
-                  </label>
-                  <select id="j-a2-gender" name="adult2_gender" defaultValue="">
+                  <label className="f">Sex</label>
+                  <select name="adult_gender" defaultValue="">
                     <option value="">Select</option>
                     <option>Male</option>
                     <option>Female</option>
@@ -178,19 +182,14 @@ export default function JoinForm() {
                   </select>
                 </div>
                 <div>
-                  <label className="f" htmlFor="j-a2-dob">
-                    Date of birth
-                  </label>
-                  <input id="j-a2-dob" name="adult2_dob" type="date" required />
+                  <label className="f">Date of birth</label>
+                  <input name="adult_dob" type="date" required />
                 </div>
               </div>
 
-              <label className="f" htmlFor="j-a2-cid">
-                Citizenship ID (CID)
-              </label>
+              <label className="f">Citizenship ID (CID)</label>
               <input
-                id="j-a2-cid"
-                name="adult2_cid"
+                name="adult_cid"
                 type="text"
                 required
                 inputMode="numeric"
@@ -200,7 +199,15 @@ export default function JoinForm() {
                 placeholder="11-digit CID number"
               />
             </div>
-          )}
+          ))}
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            style={{ marginTop: 16 }}
+            onClick={addAdult}
+          >
+            + Add an adult
+          </button>
 
           <label className="f" style={{ marginTop: 20 }}>
             Children under 18
@@ -275,7 +282,7 @@ export default function JoinForm() {
       </button>
       <p style={{ fontSize: 12, color: "var(--ink-soft)", marginTop: 8, textAlign: "center" }}>
         {category === "family"
-          ? "Family membership is $30/yr flat — continue to Stripe to pay. Returning members keep their original membership number when their date of birth and CID match."
+          ? "Family membership is $30 Annually — continue to Stripe to pay. Returning members keep their original membership number when their date of birth and CID match."
           : "Members 18 and over continue to Stripe to pay $20. Under-18 registrations are free and activate immediately. Returning members keep their original membership number when their date of birth and CID match."}
       </p>
     </form>

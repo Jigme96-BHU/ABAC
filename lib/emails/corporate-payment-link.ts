@@ -14,7 +14,7 @@ export function corporatePaymentLinkEmail({
   businessName: string;
   contactName: string;
   tier: string;
-  /** e.g. "$500 AUD / year" */
+  /** e.g. "$500 AUD Annually" */
   fee: string;
   paymentUrl: string;
 }) {

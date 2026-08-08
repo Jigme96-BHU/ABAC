@@ -11,7 +11,7 @@ import { serviceTypeLabel } from "@/lib/service-types";
 
 type ActivationRow = {
   did_activate: boolean;
-  notification_kind: "new" | "renewal" | null;
+  notification_kind: "new" | "renewal" | "switch" | null;
   membership_type: "single" | "family" | null;
   is_dependent: boolean | null;
   household_id: string | null;
@@ -130,7 +130,7 @@ async function sendCorporateApprovedEmail(activation: CorporateActivationRow) {
       businessName: activation.business_name,
       contactName: activation.contact_name,
       tier: corporateTierLabel(activation.tier),
-      fee: `$${((activation.fee_cents ?? 0) / 100).toFixed(0)} AUD / year`,
+      fee: `$${((activation.fee_cents ?? 0) / 100).toFixed(0)} AUD Annually`,
       validUntil: activation.expires_at ? formatDate(activation.expires_at) : "—",
     });
     await mailer.sendMail({ from: MAIL_FROM, to: activation.email, subject, text, html });
@@ -188,16 +188,21 @@ async function sendOneEmail(
     if (!person.email || !person.name || person.member_no == null || person.member_year == null) return;
 
     const isFamily = person.membership_type === "family";
-    const fee = isFamily
-      ? "$30 AUD / year (family membership)"
-      : `$${((person.fee_cents ?? 0) / 100).toFixed(0)} AUD / year`;
+    const isSwitch = person.notification_kind === "switch";
+    // A switch charges a prorated top-up, not an annual fee — quoting the
+    // annual rate here would contradict what they were actually charged.
+    const fee = isSwitch
+      ? `$${((person.fee_cents ?? 0) / 100).toFixed(2)} AUD one-off (change of category)`
+      : isFamily
+        ? "$30 AUD Annually (family membership)"
+        : `$${((person.fee_cents ?? 0) / 100).toFixed(0)} AUD Annually`;
 
     const { subject, text, html } = welcomeEmail({
       name: person.name,
       memberNo: formatMemberNo(person.member_no, person.member_year),
       fee,
       validUntil: person.expires_at ? formatDate(person.expires_at) : "—",
-      kind: person.notification_kind === "renewal" ? "renewal" : "welcome",
+      kind: isSwitch ? "switch" : person.notification_kind === "renewal" ? "renewal" : "welcome",
       isFamily,
       household: otherAdults.length > 0 ? otherAdults : undefined,
       dependents: dependents.length > 0 ? dependents : undefined,

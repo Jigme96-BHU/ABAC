@@ -4,6 +4,7 @@ import JoinForm from "@/components/JoinForm";
 import StatusCheckForm from "@/components/StatusCheckForm";
 import MembershipRegistration from "@/components/MembershipRegistration";
 import CorporateForm from "@/components/CorporateForm";
+import SwitchCategoryForm from "@/components/SwitchCategoryForm";
 
 export const metadata: Metadata = {
   title: "Join",
@@ -50,7 +51,7 @@ export default function JoinPage() {
                       <tbody>
                         <tr>
                           <td>Single — one adult (18 and over)</td>
-                          <td style={{ textAlign: "right" }}>${FEE_PER_ADULT.toFixed(0)} / year</td>
+                          <td style={{ textAlign: "right" }}>${FEE_PER_ADULT.toFixed(0)} Annually</td>
                         </tr>
                         <tr>
                           <td>Single — child under 18</td>
@@ -58,7 +59,7 @@ export default function JoinPage() {
                         </tr>
                         <tr>
                           <td>Family — parent(s) + children under 18</td>
-                          <td style={{ textAlign: "right" }}>${FAMILY_FEE.toFixed(0)} / year flat</td>
+                          <td style={{ textAlign: "right" }}>${FAMILY_FEE.toFixed(0)} Annually</td>
                         </tr>
                       </tbody>
                     </table>
@@ -66,6 +67,18 @@ export default function JoinPage() {
                       Payment is processed by Stripe — card details never touch the ABAC website.
                     </p>
                   </div>
+
+                  <details className="switch-box" style={{ marginTop: 24 }}>
+                    <summary>
+                      Already a member and want to change between Single and Family?
+                    </summary>
+                    <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: "12px 0 4px" }}>
+                      You keep your membership number and your existing renewal date. Moving up to
+                      Family costs only the difference in rate for the days you have left; moving
+                      down to Single costs nothing.
+                    </p>
+                    <SwitchCategoryForm />
+                  </details>
 
                   <p style={{ fontSize: 13, color: "var(--ink-soft)", marginTop: 18 }}>
                     Looking for what membership includes?{" "}

@@ -54,7 +54,7 @@ const FAQS: Faq[] = [
     prompt: "How much is membership?",
     keywords: ["fee", "fees", "cost", "much", "price", "payment", "pay", "$20", "adult", "child"],
     answer:
-      "Membership is $20 per year for each adult (18 and over). Children under 18 join free. The total is shown at checkout and paid by card when you register.",
+      "Membership is $20 Annually for each adult (18 and over). Children under 18 join free. The total is shown at checkout and paid by card when you register.",
     dzAnswer:
       "འཐུས་མིའི་གླ་ཡོན་འདི་ ལོ་ ༡༨ ཡན་ཆད་ཀྱི་མི་རེ་ལུ་ ལོ་རེར་ $20 ཨིན། ལོ་ ༡༨ མན་ཆད་ཚུ་རིན་མེད་ཨིན།",
     links: [{ label: "Join ABAC", href: "/join" }],

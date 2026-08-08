@@ -4,6 +4,32 @@ import { useState, useTransition, type FormEvent } from "react";
 import { submitCorporateApplication } from "@/app/join/actions";
 import { CORPORATE_TIERS, type CorporateTier } from "@/lib/corporate-tiers";
 
+/** Fixed positions rather than Math.random(): the server and client must
+ *  render identical markup or React throws a hydration mismatch. The illusion
+ *  of randomness comes from the staggered delays and mismatched durations —
+ *  no two stars are ever lit at the same moment, and the cycle lengths never
+ *  line up, so the glitter never visibly repeats. */
+const TIER_SPARKS = [
+  { x: 6, y: 24, size: 5, delay: 0.0, dur: 2.3 },
+  { x: 14, y: 68, size: 3, delay: 1.4, dur: 1.9 },
+  { x: 21, y: 12, size: 4, delay: 2.7, dur: 2.6 },
+  { x: 27, y: 82, size: 5, delay: 0.6, dur: 2.1 },
+  { x: 33, y: 41, size: 3, delay: 3.3, dur: 2.8 },
+  { x: 39, y: 74, size: 4, delay: 1.9, dur: 1.7 },
+  { x: 45, y: 18, size: 6, delay: 0.9, dur: 2.5 },
+  { x: 51, y: 57, size: 3, delay: 2.2, dur: 2.0 },
+  { x: 57, y: 88, size: 4, delay: 3.8, dur: 2.4 },
+  { x: 63, y: 29, size: 5, delay: 0.3, dur: 2.9 },
+  { x: 69, y: 63, size: 3, delay: 1.6, dur: 1.8 },
+  { x: 74, y: 15, size: 4, delay: 2.9, dur: 2.2 },
+  { x: 80, y: 79, size: 5, delay: 1.1, dur: 2.7 },
+  { x: 86, y: 36, size: 3, delay: 3.5, dur: 1.9 },
+  { x: 91, y: 70, size: 4, delay: 0.5, dur: 2.4 },
+  { x: 95, y: 22, size: 5, delay: 2.4, dur: 2.1 },
+  { x: 10, y: 47, size: 4, delay: 4.1, dur: 2.6 },
+  { x: 47, y: 92, size: 3, delay: 1.2, dur: 2.0 },
+];
+
 const TIER_TAGLINE: Record<CorporateTier, string> = {
   diamond: "Principal community partner",
   platinum: "Featured community partner",
@@ -76,10 +102,29 @@ export default function CorporateForm() {
           <button
             key={t.value}
             type="button"
-            className={tier === t.value ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"}
+            aria-pressed={tier === t.value}
+            className={`btn btn-sm tier-btn tier-${t.value}${tier === t.value ? " is-selected" : ""}`}
             onClick={() => setTier(t.value)}
           >
-            {t.label}
+            <span className="tier-sparks" aria-hidden="true">
+              {TIER_SPARKS.map((sp, i) => (
+                <i
+                  key={i}
+                  className="spark"
+                  style={{
+                    left: `${sp.x}%`,
+                    top: `${sp.y}%`,
+                    width: sp.size,
+                    height: sp.size,
+                    animationDelay: `${sp.delay}s`,
+                    animationDuration: `${sp.dur}s`,
+                  }}
+                />
+              ))}
+            </span>
+            {/* Wrapped so the label paints above the glitter layers — a bare
+                text node can't be given a stacking order. */}
+            <span className="tier-label">{t.label}</span>
           </button>
         ))}
       </div>
@@ -138,9 +183,15 @@ export default function CorporateForm() {
           </div>
           <div>
             <label className="f" htmlFor="c-phone">
-              Business phone
+              Business phone / mobile
             </label>
-            <input id="c-phone" name="phone" type="tel" required placeholder="02 xxxx xxxx" />
+            <input
+              id="c-phone"
+              name="phone"
+              type="tel"
+              required
+              placeholder="02 xxxx xxxx or +61 4xx xxx xxx"
+            />
           </div>
         </div>
 

@@ -18,11 +18,11 @@ export function welcomeEmail({
 }: {
   name: string;
   memberNo: string;
-  /** e.g. "$20 AUD / year" or "Free — under 18" */
+  /** e.g. "$20 AUD Annually" or "Free — under 18" */
   fee: string;
   /** already formatted, e.g. "17 Jul 2027" */
   validUntil: string;
-  kind?: "welcome" | "renewal";
+  kind?: "welcome" | "renewal" | "switch";
   /** Whether this is a Family Membership registration — used to say "family
    *  membership" explicitly in the intro line, not just in the fee text. */
   isFamily?: boolean;
@@ -34,16 +34,25 @@ export function welcomeEmail({
   dependents?: string[];
 }) {
   const isRenewal = kind === "renewal";
+  const isSwitch = kind === "switch";
   const membershipNoun = isFamily ? "family membership" : "membership";
-  const subject = isRenewal
-    ? `ABAC ${membershipNoun} renewed`
-    : `Welcome to ABAC — your ${membershipNoun} is active`;
-  const introText = isRenewal
-    ? `Your ABAC ${membershipNoun} has been renewed and is active.`
-    : `Kuzu zangpo la, and welcome to the ABAC family! Your ${membershipNoun} is confirmed and active.`;
-  const introHtml = isRenewal
-    ? `Your ABAC ${membershipNoun} has been renewed and is active.`
-    : `<strong>Kuzu zangpo la, and welcome to the ABAC family!</strong> Your ${membershipNoun} is confirmed and active.`;
+  // A switch keeps the existing renewal date, so this must not imply the
+  // membership was extended — only that the category changed.
+  const subject = isSwitch
+    ? `ABAC membership changed to ${isFamily ? "Family" : "Single"}`
+    : isRenewal
+      ? `ABAC ${membershipNoun} renewed`
+      : `Welcome to ABAC — your ${membershipNoun} is active`;
+  const introText = isSwitch
+    ? `Your ABAC membership has been changed to ${isFamily ? "Family" : "Single"} and is active. Your renewal date is unchanged.`
+    : isRenewal
+      ? `Your ABAC ${membershipNoun} has been renewed and is active.`
+      : `Kuzu zangpo la, and welcome to the ABAC family! Your ${membershipNoun} is confirmed and active.`;
+  const introHtml = isSwitch
+    ? `Your ABAC membership has been changed to <strong>${isFamily ? "Family" : "Single"}</strong> and is active. Your renewal date is unchanged.`
+    : isRenewal
+      ? `Your ABAC ${membershipNoun} has been renewed and is active.`
+      : `<strong>Kuzu zangpo la, and welcome to the ABAC family!</strong> Your ${membershipNoun} is confirmed and active.`;
 
   const householdLines =
     household && household.length > 0

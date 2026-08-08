@@ -160,104 +160,141 @@ export async function submitMembership(formData: FormData): Promise<SubmitResult
 // see submit_family_registration (0009_family_membership.sql).
 // ---------------------------------------------------------------------------
 
-function parseAdult(
-  formData: FormData,
-  prefix: string
-): { value: FamilyMemberInput; label: string } | { error: string } | null {
-  const email = String(formData.get(`${prefix}_email`) ?? "").trim();
-  const name = String(formData.get(`${prefix}_name`) ?? "").trim();
-  const gender = String(formData.get(`${prefix}_gender`) ?? "").trim();
-  const dob = String(formData.get(`${prefix}_dob`) ?? "");
-  const cid = String(formData.get(`${prefix}_cid`) ?? "").trim();
+/** Every adult in the household posts under the same repeated field names
+ *  (adult_email, adult_name, …) in DOM order, so the number of adults is
+ *  unbounded — same shape as the child rows. Index 0 is the adult who filled
+ *  in the top of the form; their phone/suburb are applied by the caller. */
+function parseAdults(formData: FormData): { value: FamilyMemberInput[] } | { error: string } {
+  const emails = formData.getAll("adult_email").map((v) => String(v).trim());
+  const names = formData.getAll("adult_name").map((v) => String(v).trim());
+  const genders = formData.getAll("adult_gender").map((v) => String(v).trim());
+  const dobs = formData.getAll("adult_dob").map((v) => String(v));
+  const cids = formData.getAll("adult_cid").map((v) => String(v).trim());
 
-  if (!email && !name && !dob && !cid) return null; // optional second adult, not provided
+  const rows = Math.max(emails.length, names.length, dobs.length, cids.length);
+  const adults: FamilyMemberInput[] = [];
 
-  const label = prefix === "adult1" ? "the first adult" : "the second adult";
-  if (!email || !name || !dob || !cid) {
-    return { error: `Please fill in email, name, date of birth, and CID for ${label}.` };
-  }
-  if (!isValidCid(cid)) {
-    return { error: `CID must be exactly 11 digits for ${label}.` };
-  }
+  for (let i = 0; i < rows; i++) {
+    const email = emails[i] ?? "";
+    const name = names[i] ?? "";
+    const dob = dobs[i] ?? "";
+    const cid = cids[i] ?? "";
+    if (!email && !name && !dob && !cid) continue; // blank row left behind after removing one
 
-  const age = ageFrom(dob);
-  if (age < 18 || age > 130) {
-    return { error: `${label === "the first adult" ? "The first adult" : "The second adult"} must be 18 or older — please check the date of birth.` };
-  }
+    const label = i === 0 ? "the first adult" : `adult ${i + 1}`;
+    if (!email || !name || !dob || !cid) {
+      return { error: `Please fill in email, name, date of birth, and CID for ${label}.` };
+    }
+    if (!isValidCid(cid)) {
+      return { error: `CID must be exactly 11 digits for ${label}.` };
+    }
 
-  return {
-    value: {
+    const age = ageFrom(dob);
+    if (age < 18 || age > 130) {
+      return {
+        error: `${i === 0 ? "The first adult" : `Adult ${i + 1}`} must be 18 or older — please check the date of birth.`,
+      };
+    }
+
+    adults.push({
       member_id: crypto.randomUUID(),
       email,
       name,
-      gender: gender || null,
+      gender: genders[i] || null,
       dob,
       cid,
       phone: null,
       suburb: null,
-    },
-    label,
-  };
+    });
+  }
+
+  if (adults.length === 0) {
+    return { error: "Please fill in the first adult's details." };
+  }
+  return { value: adults };
+}
+
+/** Dependent children — recorded in the Register of Members with their own
+ *  name/DOB/CID, but they never pay and never get their own email, so they
+ *  inherit the registering adult's address. */
+function parseChildren(
+  formData: FormData,
+  contactEmail: string
+): { value: FamilyMemberInput[] } | { error: string } {
+  const names = formData.getAll("child_name").map((v) => String(v).trim());
+  const dobs = formData.getAll("child_dob").map((v) => String(v));
+  const cids = formData.getAll("child_cid").map((v) => String(v).trim());
+
+  const children: FamilyMemberInput[] = [];
+  for (let i = 0; i < names.length; i++) {
+    const name = names[i] ?? "";
+    const dob = dobs[i] ?? "";
+    const cid = cids[i] ?? "";
+    if (!name && !dob && !cid) continue; // blank row left behind after removing one
+
+    if (!name || !dob || !cid) {
+      return { error: "Please fill in name, date of birth, and CID for every child, or remove the empty row." };
+    }
+    if (!isValidCid(cid)) {
+      return { error: `CID must be exactly 11 digits for ${name}.` };
+    }
+    const age = ageFrom(dob);
+    if (age < 0 || age >= 18) {
+      return { error: `${name || "A child"} on this registration is 18 or older — register them as an adult instead.` };
+    }
+    children.push({
+      member_id: crypto.randomUUID(),
+      email: contactEmail,
+      name,
+      gender: null,
+      dob,
+      cid,
+      phone: null,
+      suburb: null,
+    });
+  }
+  return { value: children };
+}
+
+/** Two people in one household sharing a CID would both match the same
+ *  existing member row and quietly collapse into one — reject it up front
+ *  rather than let the RPC do something surprising. */
+function duplicateCid(members: FamilyMemberInput[]): string | null {
+  const seen = new Set<string>();
+  for (const m of members) {
+    if (seen.has(m.cid)) return m.name;
+    seen.add(m.cid);
+  }
+  return null;
 }
 
 async function submitFamilyMembership(formData: FormData): Promise<SubmitResult> {
   const phone = String(formData.get("phone") ?? "").trim();
   const suburb = String(formData.get("suburb") ?? "").trim();
 
-  const adult1Result = parseAdult(formData, "adult1");
-  if (!adult1Result) {
-    return { error: "Please fill in the first adult's details." };
-  }
-  if ("error" in adult1Result) return adult1Result;
-  const adult1 = adult1Result.value;
-  adult1.phone = phone || null;
-  adult1.suburb = suburb || null;
+  const adultsResult = parseAdults(formData);
+  if ("error" in adultsResult) return adultsResult;
+  const adults = adultsResult.value;
+  adults[0].phone = phone || null;
+  adults[0].suburb = suburb || null;
 
-  const adult2Result = parseAdult(formData, "adult2");
-  if (adult2Result && "error" in adult2Result) return adult2Result;
-  const adult2 = adult2Result?.value ?? null;
+  const childrenResult = parseChildren(formData, adults[0].email);
+  if ("error" in childrenResult) return childrenResult;
+  const children = childrenResult.value;
 
-  const childNames = formData.getAll("child_name").map((v) => String(v).trim());
-  const childDobs = formData.getAll("child_dob").map((v) => String(v));
-  const childCids = formData.getAll("child_cid").map((v) => String(v).trim());
-
-  const children: FamilyMemberInput[] = [];
-  for (let i = 0; i < childNames.length; i++) {
-    const cName = childNames[i] ?? "";
-    const cDob = childDobs[i] ?? "";
-    const cCid = childCids[i] ?? "";
-    if (!cName && !cDob && !cCid) continue; // blank row left behind after removing one
-
-    if (!cName || !cDob || !cCid) {
-      return { error: "Please fill in name, date of birth, and CID for every child, or remove the empty row." };
-    }
-    if (!isValidCid(cCid)) {
-      return { error: `CID must be exactly 11 digits for ${cName}.` };
-    }
-    const age = ageFrom(cDob);
-    if (age < 0 || age >= 18) {
-      return { error: `${cName || "A child"} on this registration is 18 or older — register them as an adult instead.` };
-    }
-    children.push({
-      member_id: crypto.randomUUID(),
-      email: adult1.email,
-      name: cName,
-      gender: null,
-      dob: cDob,
-      cid: cCid,
-      phone: null,
-      suburb: null,
-    });
-  }
-
-  if (!adult2 && children.length === 0) {
+  if (adults.length === 1 && children.length === 0) {
     return {
       error:
-        "Family membership must include at least one other household member — add a spouse/partner or a dependent child, or choose Single membership.",
+        "Family membership must include at least one other household member — add another adult or a dependent child, or choose Single membership.",
     };
   }
 
-  const members = [adult1, ...(adult2 ? [adult2] : []), ...children];
+  const members = [...adults, ...children];
+  const duplicate = duplicateCid(members);
+  if (duplicate) {
+    return { error: `${duplicate} has the same CID as someone else on this registration — each person needs their own CID.` };
+  }
+
   const householdId = crypto.randomUUID();
   const supabase = await createClient();
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:4321";
@@ -276,7 +313,7 @@ async function submitFamilyMembership(formData: FormData): Promise<SubmitResult>
     ],
     success_url: `${siteUrl}/join/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${siteUrl}/join?canceled=1`,
-    customer_email: adult1.email,
+    customer_email: adults[0].email,
     metadata: { household_id: householdId },
   });
 
@@ -288,6 +325,228 @@ async function submitFamilyMembership(formData: FormData): Promise<SubmitResult>
     p_household_id: householdId,
     p_session_id: session.id,
     p_fee_cents: FAMILY_FEE_CENTS,
+    p_members: members,
+  });
+  if (error) return { error: error.message };
+
+  redirect(session.url);
+}
+
+// ---------------------------------------------------------------------------
+// Change of category — Single <-> Family part-way through a membership year.
+//
+// Pricing is "model A" (see 0014_category_switch.sql): the member keeps their
+// existing renewal date and pays only the difference in annual rate for the
+// days they have left. Family -> Single therefore clamps to $0 with the expiry
+// untouched. The amount is always quoted by the database, never accepted from
+// the browser, and the same quote is recomputed server-side at submit time so
+// a stale or tampered price can't reach Stripe.
+// ---------------------------------------------------------------------------
+
+/** Stripe rejects charges under $0.50 AUD, so a switch worth less than that
+ *  (a handful of days left) is applied for free rather than blocking it. */
+const STRIPE_MIN_CHARGE_CENTS = 50;
+
+type QuoteRow = {
+  member_found: boolean;
+  eligible: boolean;
+  reason: string | null;
+  member_id: string | null;
+  name: string | null;
+  member_no: number | null;
+  member_year: number | null;
+  current_type: "single" | "family" | null;
+  expires_at: string | null;
+  days_left: number;
+  amount_due_cents: number;
+};
+
+export type SwitchQuote =
+  | { ok: false; message: string }
+  | {
+      ok: true;
+      name: string;
+      memberNo: string;
+      currentType: "single" | "family";
+      targetType: "single" | "family";
+      daysLeft: number;
+      amountDueCents: number;
+      expiresAt: string | null;
+    };
+
+function quoteMessage(row: QuoteRow, target: string): string {
+  switch (row.reason) {
+    case "not_found":
+      return "We couldn't find a membership with that date of birth and CID. Check both, or register instead.";
+    case "same_type":
+      return `That membership is already ${target === "family" ? "a Family" : "a Single"} membership.`;
+    case "not_active":
+      return "That membership isn't active yet — if a payment is still pending, please wait for it to complete.";
+    case "expired":
+      return "That membership has expired, so there are no unused days to carry over. Please renew in the form above instead.";
+    case "dependent":
+      return "That record is a dependent child on a family membership. The adult who registered the household needs to make this change.";
+    default:
+      return "That membership can't be changed online — please contact the committee.";
+  }
+}
+
+async function fetchQuote(dob: string, cid: string, target: string) {
+  const supabase = await createClient();
+  return supabase
+    .rpc("quote_category_switch", {
+      p_dob: dob,
+      p_cid: cid,
+      p_target_type: target,
+      p_single_fee_cents: FEE_PER_ADULT_CENTS,
+      p_family_fee_cents: FAMILY_FEE_CENTS,
+    })
+    .returns<QuoteRow[]>()
+    .maybeSingle();
+}
+
+export async function quoteCategorySwitch(formData: FormData): Promise<SwitchQuote> {
+  const dob = String(formData.get("dob") ?? "");
+  const cid = String(formData.get("cid") ?? "").trim();
+  const target = String(formData.get("target_type") ?? "");
+
+  if (!dob || !cid) {
+    return { ok: false, message: "Please enter your date of birth and CID." };
+  }
+  if (!isValidCid(cid)) {
+    return { ok: false, message: "CID must be exactly 11 digits." };
+  }
+  if (target !== "single" && target !== "family") {
+    return { ok: false, message: "Please choose which category you want to move to." };
+  }
+
+  const { data, error } = await fetchQuote(dob, cid, target);
+  if (error) return { ok: false, message: error.message };
+  if (!data || !data.member_found || !data.eligible) {
+    return {
+      ok: false,
+      message: data ? quoteMessage(data, target) : "We couldn't find that membership.",
+    };
+  }
+
+  return {
+    ok: true,
+    name: data.name ?? "",
+    memberNo:
+      data.member_no != null && data.member_year != null
+        ? formatMemberNo(data.member_no, data.member_year)
+        : "",
+    currentType: data.current_type ?? "single",
+    targetType: target,
+    daysLeft: data.days_left,
+    amountDueCents: data.amount_due_cents,
+    expiresAt: data.expires_at,
+  };
+}
+
+export async function submitCategorySwitch(formData: FormData): Promise<SubmitResult> {
+  const target = String(formData.get("target_type") ?? "");
+  if (target !== "single" && target !== "family") {
+    return { error: "Please choose which category you want to move to." };
+  }
+
+  const phone = String(formData.get("phone") ?? "").trim();
+  const suburb = String(formData.get("suburb") ?? "").trim();
+
+  // The person switching is always adult 1 — the RPC anchors the household's
+  // renewal date on whoever is listed first.
+  const adultsResult = parseAdults(formData);
+  if ("error" in adultsResult) return adultsResult;
+  const adults = adultsResult.value;
+  adults[0].phone = phone || null;
+  adults[0].suburb = suburb || null;
+
+  const childrenResult = parseChildren(formData, adults[0].email);
+  if ("error" in childrenResult) return childrenResult;
+  const children = childrenResult.value;
+
+  if (target === "single" && (adults.length > 1 || children.length > 0)) {
+    return {
+      error:
+        "A Single membership covers one person only — remove the other household members before switching.",
+    };
+  }
+  if (target === "family" && adults.length === 1 && children.length === 0) {
+    return {
+      error:
+        "Family membership must include at least one other household member — add another adult or a dependent child.",
+    };
+  }
+
+  const members = [...adults, ...children];
+  const duplicate = duplicateCid(members);
+  if (duplicate) {
+    return { error: `${duplicate} has the same CID as someone else on this form — each person needs their own CID.` };
+  }
+
+  // Re-quoted here rather than trusting anything the browser posted back.
+  const { data: quote, error: quoteError } = await fetchQuote(
+    adults[0].dob,
+    adults[0].cid,
+    target
+  );
+  if (quoteError) return { error: quoteError.message };
+  if (!quote || !quote.member_found || !quote.eligible) {
+    return { error: quote ? quoteMessage(quote, target) : "We couldn't find that membership." };
+  }
+
+  const dueCents = quote.amount_due_cents < STRIPE_MIN_CHARGE_CENTS ? 0 : quote.amount_due_cents;
+  const householdId = crypto.randomUUID();
+  const supabase = await createClient();
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:4321";
+
+  // Nothing to pay (Family -> Single, or only a few days left) — apply it now.
+  if (dueCents === 0) {
+    const { data, error } = await supabase
+      .rpc("submit_category_switch", {
+        p_household_id: householdId,
+        p_session_id: null,
+        p_fee_cents: 0,
+        p_target_type: target,
+        p_members: members,
+      })
+      .returns<{ member_id: string }[]>();
+    if (error) return { error: error.message };
+
+    const first = Array.isArray(data) ? data[0] : null;
+    if (!first) return { error: "The change didn't complete — please try again." };
+    redirect(`${siteUrl}/join/success?member_id=${first.member_id}`);
+  }
+
+  const session = await stripe.checkout.sessions.create({
+    mode: "payment",
+    line_items: [
+      {
+        price_data: {
+          currency: "aud",
+          unit_amount: dueCents,
+          product_data: {
+            name: `ABAC membership change to ${target === "family" ? "Family" : "Single"} (${quote.days_left} days remaining)`,
+          },
+        },
+        quantity: 1,
+      },
+    ],
+    success_url: `${siteUrl}/join/success?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${siteUrl}/join?canceled=1`,
+    customer_email: adults[0].email,
+    metadata: { household_id: householdId, switch_to: target },
+  });
+
+  if (!session.url) {
+    return { error: "Couldn't start checkout — please try again." };
+  }
+
+  const { error } = await supabase.rpc("submit_category_switch", {
+    p_household_id: householdId,
+    p_session_id: session.id,
+    p_fee_cents: dueCents,
+    p_target_type: target,
     p_members: members,
   });
   if (error) return { error: error.message };

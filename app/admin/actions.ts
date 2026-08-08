@@ -338,7 +338,7 @@ export async function approveCorporateMember(id: string) {
   if (updateError) return { error: updateError.message };
 
   try {
-    const fee = `$${(feeCents / 100).toFixed(0)} AUD / year`;
+    const fee = `$${(feeCents / 100).toFixed(0)} AUD Annually`;
     const { subject, text, html } = corporatePaymentLinkEmail({
       businessName: member.business_name,
       contactName: member.contact_name,
