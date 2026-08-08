@@ -3,9 +3,69 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe";
-import { SERVICE_FEE_CENTS, serviceTypeLabel } from "@/lib/service-types";
+import {
+  formatServiceFee,
+  parseMemberNo,
+  serviceFeeCents,
+  serviceTypeLabel,
+} from "@/lib/service-types";
 
 export type ServiceSubmitResult = { error: string };
+
+type MemberLookupRow = {
+  member_found: boolean;
+  eligible: boolean;
+  reason: string | null;
+  name: string | null;
+  email_masked: string | null;
+  member_no: number | null;
+  member_year: number | null;
+};
+
+export type MemberLookup =
+  | { ok: false; message: string }
+  | { ok: true; name: string; emailMasked: string; memberNo: number; memberYear: number };
+
+function lookupMessage(reason: string | null): string {
+  switch (reason) {
+    case "not_active":
+      return "That membership isn't active yet — if a payment is still pending, please wait for it to complete.";
+    case "expired":
+      return "That membership has expired. Renew it to use the member rate, or tick “I'm not an ABAC member”.";
+    default:
+      return "We couldn't find that membership number. Check it, or tick “I'm not an ABAC member”.";
+  }
+}
+
+/** Looks a membership number up so the form can confirm the requester has the
+ *  right record before they pay. Returns a masked email by design — see the
+ *  privacy note on lookup_member_for_service in
+ *  supabase/migrations/0015_service_member_pricing.sql. */
+export async function lookupMemberForService(memberNoInput: string): Promise<MemberLookup> {
+  const memberNo = parseMemberNo(memberNoInput);
+  if (memberNo === null) {
+    return { ok: false, message: "Enter your membership number, e.g. ABAC-2026-000123." };
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .rpc("lookup_member_for_service", { p_member_no: memberNo })
+    .returns<MemberLookupRow[]>()
+    .maybeSingle();
+
+  if (error) return { ok: false, message: error.message };
+  if (!data || !data.member_found || !data.eligible) {
+    return { ok: false, message: lookupMessage(data?.reason ?? null) };
+  }
+
+  return {
+    ok: true,
+    name: data.name ?? "",
+    emailMasked: data.email_masked ?? "",
+    memberNo: data.member_no ?? memberNo,
+    memberYear: data.member_year ?? new Date().getFullYear(),
+  };
+}
 
 const DOCUMENT_EXT_BY_TYPE: Record<string, string> = {
   "application/pdf": "pdf",
@@ -49,32 +109,40 @@ export async function submitServiceRequest(formData: FormData): Promise<ServiceS
     return { error: "Please fill in your name, email, and phone." };
   }
 
-  const passport = formData.get("passport");
-  if (!(passport instanceof File) || passport.size === 0) {
-    return { error: "A passport scan is required for this request." };
+  // The fee is decided here, from the database — the browser posts a
+  // membership number and a checkbox, never a price.
+  const notAMember = formData.get("not_a_member") === "on";
+  let memberNo: number | null = null;
+  if (!notAMember) {
+    const lookup = await lookupMemberForService(String(formData.get("member_no") ?? ""));
+    if (!lookup.ok) return { error: lookup.message };
+    memberNo = lookup.memberNo;
+  }
+  const isMember = memberNo !== null;
+  const feeCents = serviceFeeCents(isMember);
+
+  const requiredFiles: { formKey: string; key: string; label: string }[] = [
+    { formKey: "passport", key: "passport", label: "A passport scan" },
+    { formKey: "visa", key: "visa", label: "A visa scan" },
+    { formKey: "photo_id", key: "photo_id", label: "Proof of ID (driving licence or photo ID)" },
+    { formKey: "proof_of_residency", key: "proof_of_residency", label: "Proof of residency" },
+  ];
+  for (const { formKey, label } of requiredFiles) {
+    const file = formData.get(formKey);
+    if (!(file instanceof File) || file.size === 0) {
+      return { error: `${label} is required for this request.` };
+    }
   }
 
   const supabase = await createClient();
   const requestId = crypto.randomUUID();
 
-  const passportResult = await uploadServiceDocument(supabase, passport, requestId, "passport");
-  if (passportResult.error) return { error: passportResult.error };
-
-  const optionalFields: { key: string; formKey: string }[] = [
-    { key: "visa", formKey: "visa" },
-    { key: "license", formKey: "license" },
-    { key: "proof_of_residency", formKey: "proof_of_residency" },
-  ];
-  const optionalPaths: Record<string, string | null> = {};
-  for (const { key, formKey } of optionalFields) {
-    const file = formData.get(formKey);
-    if (file instanceof File && file.size > 0) {
-      const result = await uploadServiceDocument(supabase, file, requestId, key);
-      if (result.error) return { error: result.error };
-      optionalPaths[key] = result.path ?? null;
-    } else {
-      optionalPaths[key] = null;
-    }
+  const paths: Record<string, string> = {};
+  for (const { formKey, key } of requiredFiles) {
+    const file = formData.get(formKey) as File;
+    const result = await uploadServiceDocument(supabase, file, requestId, key);
+    if (result.error) return { error: result.error };
+    paths[key] = result.path ?? "";
   }
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:4321";
@@ -84,8 +152,10 @@ export async function submitServiceRequest(formData: FormData): Promise<ServiceS
       {
         price_data: {
           currency: "aud",
-          unit_amount: SERVICE_FEE_CENTS,
-          product_data: { name: `ABAC service — ${serviceTypeLabel(serviceType)}` },
+          unit_amount: feeCents,
+          product_data: {
+            name: `ABAC service — ${serviceTypeLabel(serviceType)} (${isMember ? "member" : "non-member"} rate)`,
+          },
         },
         quantity: 1,
       },
@@ -105,12 +175,14 @@ export async function submitServiceRequest(formData: FormData): Promise<ServiceS
     requester_name: requesterName,
     email,
     phone,
-    passport_path: passportResult.path,
-    visa_path: optionalPaths.visa,
-    license_path: optionalPaths.license,
-    proof_of_residency_path: optionalPaths.proof_of_residency,
+    passport_path: paths.passport,
+    visa_path: paths.visa,
+    photo_id_path: paths.photo_id,
+    proof_of_residency_path: paths.proof_of_residency,
     notes: notes || null,
-    fee_cents: SERVICE_FEE_CENTS,
+    member_no: memberNo,
+    is_member: isMember,
+    fee_cents: feeCents,
     stripe_checkout_session_id: session.id,
   });
   if (error) return { error: error.message };

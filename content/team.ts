@@ -106,17 +106,17 @@ export const FORMER_PRESIDENTS: FormerPresident[] = [
   },
   {
     "name": "Alu Passa",
-    "tenure": "2023-2024 and 2014-2015",
+    "tenure": "2023-2024",
     "founder": false,
     "slug": "alu-passa",
     "image": "/img/team/prez-alu-passa-2023-2024-2014-2015.jpg"
   },
   {
     "name": "Dorji Tshering",
-    "tenure": "2022-2023 and 2019-2020",
+    "tenure": "2022-2023",
     "founder": false,
     "slug": "dorji-tshering",
-    "image": "/img/team/prez-dorji-tshering-2019-2020.jpg"
+    "image": "/img/team/prez-dorji-tshering-2022-2023.jpg"
   },
   {
     "name": "Tshering Penjor",
@@ -131,6 +131,13 @@ export const FORMER_PRESIDENTS: FormerPresident[] = [
     "founder": false,
     "slug": "karma-drupchu",
     "image": "/img/team/prez-karma-drupchu-2020-2021.jpg"
+  },
+  {
+    "name": "Dorji Tshering",
+    "tenure": "2019-2020",
+    "founder": false,
+    "slug": "dorji-tshering",
+    "image": "/img/team/prez-dorji-tshering-2019-2020.jpg"
   },
   {
     "name": "Chencho Tshering",
@@ -148,10 +155,10 @@ export const FORMER_PRESIDENTS: FormerPresident[] = [
   },
   {
     "name": "Tandin Dorji",
-    "tenure": "2017-2018",
+    "tenure": "2016-2017",
     "founder": false,
     "slug": "tandin-dorji",
-    "image": "/img/team/prez-tandin-dorji-2017-2018.jpg"
+    "image": "/img/team/prez-tandin-dorji-2016-2017.jpg"
   },
   {
     "name": "Namgyel Dorji",
@@ -161,11 +168,18 @@ export const FORMER_PRESIDENTS: FormerPresident[] = [
     "image": "/img/team/prez-namgyel-dorji-2015-2016.jpg"
   },
   {
+    "name": "Alu Passa",
+    "tenure": "2014-2015",
+    "founder": false,
+    "slug": "alu-passa",
+    "image": "/img/team/prez-alu-passa-2023-2024-2014-2015.jpg"
+  },
+  {
     "name": "Sonam Choden",
     "tenure": "2013-2014",
     "founder": false,
     "slug": "sonam-choden",
-    "image": "/img/team/prez-sonam-choden-2013-2014.jpg"
+    "image": "/img/team/prez-sonam-choden-2013-2014-square.jpg"
   },
   {
     "name": "Ugyen Namgay",
@@ -222,16 +236,16 @@ export const ADVISORY_BOARD: AdvisoryBoardMember[] = [
     "image": "/img/team/advisory-board/leko-portrait.jpeg"
   },
   {
-    "slug": "migmar-dorji",
-    "name": "Migmar Dorji",
-    "role": "",
-    "image": "/img/team/advisory-board/migmar-dorji.jpeg"
+    "slug": "dorji-tashi",
+    "name": "Dorji Tashi",
+    "role": "ABAC President (ex officio member with voting right)",
+    "image": "/img/team/advisory-board/dorji-tashi.jpeg"
   },
   {
     "slug": "robin-rimal",
     "name": "Robin Rimal",
     "role": "",
-    "image": null
+    "image": "/img/team/advisory-board/robin-rimal.jpeg"
   },
   {
     "slug": "tsheten-dorji",
@@ -246,9 +260,9 @@ export const ADVISORY_BOARD: AdvisoryBoardMember[] = [
     "image": "/img/team/advisory-board/wangda-dorji.jpeg"
   },
   {
-    "slug": "dorji-tashi",
-    "name": "Dorji Tashi",
-    "role": "ABAC President (ex officio member with voting right)",
-    "image": "/img/team/executive-member/dorji-tashi.jpeg"
+    "slug": "migmar-dorji",
+    "name": "Migmar Dorji",
+    "role": "",
+    "image": "/img/team/advisory-board/migmar-dorji.jpeg"
   }
 ];

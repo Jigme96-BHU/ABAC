@@ -41,7 +41,7 @@ export default function SiteFooter() {
           <div>
             <h4>Association</h4>
             <Link href="/#about">About us</Link>
-            <Link href="/team">Our team</Link>
+            <Link href="/team">Our leadership team</Link>
             <Link href="/privacy">Privacy statement</Link>
             <Link href="/documents">Policies &amp; Documents</Link>
             <Link href="/admin">Committee sign-in</Link>

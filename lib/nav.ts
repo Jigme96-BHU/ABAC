@@ -7,7 +7,7 @@ export const NAV: NavItem[] = [
   { href: "/events", label: "Events", header: true },
   { href: "/join", label: "Join", header: true },
   { href: "/services", label: "Services", header: true },
-  { href: "/team", label: "Team", header: true },
+  { href: "/team", label: "Leadership", header: true },
   { href: "/donate", label: "Donate", header: false },
   { href: "/contact", label: "Contact", header: true },
 ];

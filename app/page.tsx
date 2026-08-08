@@ -1,7 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import logo from "@/public/img/logo/abac-logo.png";
-import heroBg from "@/public/img/hero/community.jpg";
+import HeroSlideshow from "@/components/HeroSlideshow";
 import { fromRow } from "@/content/events";
 import { createClient } from "@/lib/supabase/server";
 import { getAllStories } from "@/lib/get-stories";
@@ -31,16 +31,17 @@ export default async function HomePage() {
       <RoyalPortrait />
 
       <div className="hero">
-        {/* Community backdrop — the ACT Bhutanese community at the National Day
-            celebration, darkened behind a navy scrim so the text stays legible.
-            Decorative, so alt="" and it's excluded from the accessibility tree. */}
-        <Image src={heroBg} alt="" fill sizes="100vw" className="hero-bg" placeholder="blur" priority />
+        {/* Community backdrop — ACT Bhutanese community photos, cross-faded and
+            darkened behind a navy scrim so the text stays legible. Decorative,
+            so it's excluded from the accessibility tree. Edit the list in
+            content/hero-slides.ts to change which photos appear. */}
+        <HeroSlideshow />
         <div className="hero-scrim" />
         <div className="wrap" style={{ position: "relative" }}>
           <div className="hero-inner">
             <span className="dz-eyebrow">༄༅། ཨུས་ཊེ་ལི་ཡ་དང་འབྲུག་མཐུན་འབྲེལ་ཚོགས་པ་ཀེན་བེ་ར།</span>
             <div className="royal-sub">AUSTRALIA–BHUTAN ASSOCIATION OF CANBERRA</div>
-            <h1>One community, far from home, close together.</h1>
+            <h1>For a Stronger Community</h1>
             <p>
               The Australia–Bhutan Association of Canberra connects Bhutanese families and
               multicultural communities across the ACT through cultural heritage, language,
@@ -68,33 +69,34 @@ export default async function HomePage() {
           <span className="dz-eyebrow">ང་བཅས་ཀྱི་སྐོར།</span>
           <h2 style={{ fontSize: "clamp(24px,3.4vw,32px)", marginBottom: 16 }}>About us</h2>
           <p style={{ marginBottom: 14 }}>
-            The Australia–Bhutan Association of Canberra Incorporated is a registered
-            community organisation dedicated to supporting Bhutanese families, students, and
-            friends of Bhutan throughout the Australian Capital Territory (ACT). The
-            Association operates under the foundational principles of <em>lay-ju-drey</em>{" "}
+            The Australia–Bhutan Association of Canberra Inc. (ABAC) is a community
+            organisation dedicated to supporting Bhutanese individuals and families,
+            students, and friends of Bhutan across the Australian Capital Territory (ACT).
+            ABAC is guided by the foundational Bhutanese principles of <em>lay-ju-drey</em>{" "}
             (the law of karmic cause and effect) and <em>tha-dam-tse</em> (unwavering
             loyalty, trust, and moral integrity).
           </p>
           <p style={{ marginBottom: 20 }}>
-            To foster cultural preservation and social cohesion, the Association delivers
-            national and cultural celebrations, youth leadership initiatives, and educational
-            programming for children. It also provides welfare support for community members
-            experiencing hardship, while actively representing Bhutanese heritage at
-            Canberra&apos;s premier multicultural events.
+            To promote Bhutanese cultural heritage and strengthen social cohesion, ABAC
+            organises national and cultural celebrations, youth leadership initiatives, and
+            educational programs for children. It also provides welfare assistance to
+            community members experiencing hardship and actively represents Bhutanese
+            culture and heritage at Canberra’s major multicultural events and across
+            relevant civic and community forums.
           </p>
-          <div className="pay-box" style={{ marginTop: 24, marginBottom: 22 }}>
+          <div className="pay-box objects-box" style={{ marginTop: 24, marginBottom: 22 }}>
             <div className="pay-head">
-              <strong>Our constitutional objects</strong>
+              <strong>Our Constitutional Objects</strong>
             </div>
-            <p style={{ margin: "10px 0 14px", color: "var(--ink-soft)" }}>
+            <p style={{ margin: "6px 0 12px", color: "var(--ink-soft)" }}>
               ABAC is governed by its approved constitution and exists to advance five
               public community purposes:
             </p>
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))",
-                gap: 10,
+                gridTemplateColumns: "repeat(auto-fit,minmax(168px,1fr))",
+                gap: 8,
               }}
             >
               {[
@@ -108,10 +110,10 @@ export default async function HomePage() {
                   key={item}
                   style={{
                     border: "1px solid var(--line)",
-                    borderRadius: 8,
-                    padding: "10px 12px",
+                    borderRadius: 7,
+                    padding: "8px 11px",
                     background: "#FFFEF9",
-                    fontSize: 13,
+                    fontSize: 12.5,
                     fontWeight: 700,
                     color: "var(--gd-ink)",
                   }}
@@ -120,11 +122,11 @@ export default async function HomePage() {
                 </div>
               ))}
             </div>
-            <p style={{ margin: "14px 0 0", color: "var(--ink-soft)", fontSize: 13 }}>
-              In practical terms, this means building a respectful community, supporting
-              members in times of need, preserving Bhutanese spiritual and cultural
-              heritage, and strengthening ABAC&apos;s relationship with the Royal Bhutanese
-              Embassy, Bhutanese organisations, and the wider ACT community.
+            <p style={{ margin: "12px 0 0", color: "var(--ink-soft)", fontSize: 13 }}>
+              This means building a respectful community, supporting members in times of
+              need, preserving Bhutanese spiritual and cultural heritage, and strengthening
+              ABAC&apos;s relationship with the Royal Bhutanese Embassy, Bhutanese
+              organisations, and the wider ACT community.
             </p>
           </div>
           <Link className="btn btn-ghost btn-sm" href="/team">

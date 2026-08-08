@@ -14,7 +14,7 @@ export function corporateApprovedEmail({
   businessName: string;
   contactName: string;
   tier: string;
-  /** e.g. "$500 AUD / year" */
+  /** e.g. "$500 AUD Annually" */
   fee: string;
   /** already formatted, e.g. "17 Jul 2027" */
   validUntil: string;

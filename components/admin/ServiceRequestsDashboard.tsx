@@ -9,7 +9,7 @@ import type { ServiceRequestRow } from "@/lib/supabase/types";
 const DOCUMENT_FIELDS: { key: keyof ServiceRequestRow; label: string }[] = [
   { key: "passport_path", label: "Passport" },
   { key: "visa_path", label: "Visa" },
-  { key: "license_path", label: "License" },
+  { key: "photo_id_path", label: "Proof of ID" },
   { key: "proof_of_residency_path", label: "Proof of residency" },
 ];
 
