@@ -27,7 +27,7 @@ export default function EventsBanner() {
       </div>
       <div className="events-banner-scrim" />
       <div className="events-banner-content">
-        <span className="dz-eyebrow" style={{ color: "var(--gold-bright)" }}>
+        <span className="dz-eyebrow" style={{ color: "var(--gold-bright)", fontSize: 32 }}>
           ལས་རིམ།
         </span>
         <h1>Events</h1>
