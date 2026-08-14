@@ -7,6 +7,9 @@ import DocumentsDashboard from "./DocumentsDashboard";
 import VolunteersDashboard from "./VolunteersDashboard";
 import CorporateDashboard from "./CorporateDashboard";
 import ServiceRequestsDashboard from "./ServiceRequestsDashboard";
+import BulkEmailForm from "./BulkEmailForm";
+import BulkEmailCampaigns from "./BulkEmailCampaigns";
+import TeamMembersDashboard from "./TeamMembersDashboard";
 import type {
   EventRow,
   StoryRow,
@@ -14,9 +17,10 @@ import type {
   VolunteerRow,
   CorporateMemberRow,
   ServiceRequestRow,
+  TeamMemberRow,
 } from "@/lib/supabase/types";
 
-type Tab = "events" | "stories" | "documents" | "volunteers" | "corporate" | "services";
+type Tab = "events" | "stories" | "documents" | "volunteers" | "corporate" | "services" | "email" | "team";
 
 export default function AdminTabs({
   events,
@@ -25,6 +29,7 @@ export default function AdminTabs({
   volunteers,
   corporateMembers,
   serviceRequests,
+  teamMembers,
 }: {
   events: EventRow[];
   stories: StoryRow[];
@@ -32,6 +37,7 @@ export default function AdminTabs({
   volunteers: VolunteerRow[];
   corporateMembers: CorporateMemberRow[];
   serviceRequests: ServiceRequestRow[];
+  teamMembers: TeamMemberRow[];
 }) {
   const [tab, setTab] = useState<Tab>("events");
   const pendingCorporate = corporateMembers.filter((m) => m.status === "pending").length;
@@ -75,6 +81,18 @@ export default function AdminTabs({
         >
           Services ({serviceRequests.length})
         </button>
+        <button
+          className={tab === "email" ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"}
+          onClick={() => setTab("email")}
+        >
+          Email
+        </button>
+        <button
+          className={tab === "team" ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"}
+          onClick={() => setTab("team")}
+        >
+          Team ({teamMembers.length})
+        </button>
       </div>
 
       {tab === "events" ? (
@@ -87,8 +105,19 @@ export default function AdminTabs({
         <VolunteersDashboard volunteers={volunteers} />
       ) : tab === "corporate" ? (
         <CorporateDashboard corporateMembers={corporateMembers} />
-      ) : (
+      ) : tab === "services" ? (
         <ServiceRequestsDashboard requests={serviceRequests} />
+      ) : tab === "team" ? (
+        <TeamMembersDashboard members={teamMembers} />
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 32 }}>
+          <div>
+            <BulkEmailForm />
+          </div>
+          <div>
+            <BulkEmailCampaigns />
+          </div>
+        </div>
       )}
     </div>
   );

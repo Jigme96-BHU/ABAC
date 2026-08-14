@@ -69,6 +69,23 @@ export default async function EventStoryPage({ params }: Props) {
             />
           )}
 
+          {story.video && (
+            <video
+              controls
+              style={{
+                width: "100%",
+                height: "auto",
+                borderRadius: 14,
+                border: "1px solid var(--line)",
+                marginBottom: 26,
+                background: "#000",
+              }}
+            >
+              <source src={story.video} />
+              Your browser does not support the video tag.
+            </video>
+          )}
+
           {story.body.map((para, i) => (
             <p key={i} style={{ marginBottom: 16 }}>
               {para}

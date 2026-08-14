@@ -10,6 +10,7 @@ export type Story = {
    *  falls back to reading the file directly for local /img/stories paths. */
   imageWidth?: number;
   imageHeight?: number;
+  video?: string | null; // Public Storage URL to video, optional
   excerpt: string;
   body: string[];
 };

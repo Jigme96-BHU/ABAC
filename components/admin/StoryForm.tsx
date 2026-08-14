@@ -82,6 +82,23 @@ export default function StoryForm({
       )}
       <input id="st-image" name="image" type="file" accept="image/jpeg,image/png,image/webp" />
 
+      <label className="f" htmlFor="st-video">
+        Video {editing?.video_path && <span style={{ fontWeight: 400, color: "var(--ink-soft)" }}>(choose a file to replace the current one)</span>}
+      </label>
+      {editing?.video_path && (
+        <div style={{ marginBottom: 8 }}>
+          <video
+            width={200}
+            height={112}
+            style={{ borderRadius: 8, display: "block", background: "#000" }}
+            controls
+          >
+            <source src={editing.video_path} />
+          </video>
+        </div>
+      )}
+      <input id="st-video" name="video" type="file" accept="video/mp4,video/webm,video/quicktime" />
+
       <label className="consent">
         <input type="checkbox" name="published" defaultChecked={editing?.published ?? true} />
         Published — visible on the public Events and Stories pages

@@ -148,6 +148,67 @@ The site must not replace the live WordPress one until all of these are done.
       (unlike every other bucket in this project), so admins can only view
       uploaded documents via a short-lived signed URL from the new
       "Services" tab in `/admin`, never a public link.
+- [ ] **Run the bulk email campaigns migration** (`0014_email_campaigns.sql`,
+      requires `0001`). Adds the **Email** tab in `/admin` where the committee
+      can send mass announcements to filtered members. Filters include:
+      membership type (Single/Family), corporate tier (Gold/Platinum/Diamond),
+      date range (joined between X and Y), active/inactive status, and
+      specific individual selection. The admin form shows a live preview, and
+      all campaigns are logged with audit trail (who sent what, when, to how
+      many people). Emails are sent immediately on submission and recorded in
+      the `email_campaigns` table. Supports optional attachments (though the
+      attachment upload UI is not yet wired to Storage).
+- [ ] **Run the story videos migration** (`0015_story_videos.sql`, requires
+      `0002_stories.sql`). Extends the **Stories** feature with optional
+      **video uploads** (MP4, WebM, or MOV format). Each story can now have
+      both a photo *and* a video (both optional). Admin form includes video
+      file input and a preview player showing the current video. Videos are
+      stored in a public `story-videos` Storage bucket and rendered on the
+      public story detail pages with HTML5 video controls. Video duration
+      detection happens in the browser; the admin sees the uploaded file size.
+      Kept under **3–4MB per story** to minimize bandwidth costs.
+- [ ] **Run the team members migration** (`0016_team_members.sql`, requires
+      `0001`). Enables **admin management of the Leadership page** — adds a
+      "Team" tab in `/admin` where the committee can add/edit/remove team
+      members across four categories: Executive, Founders, Advisory Board, and
+      Former Presidents. Each member record includes name, role/title, optional
+      email/phone, bio, and photo. The public `/team` page now fetches active
+      members from the database, falling back to static content if empty.
+      Layouts remain the same (Executive grid, Advisory orbit, Founder cards),
+      but they now scale dynamically — no fixed blank spots, responsive to
+      member count changes. Photos stored in a public `team-photos` Storage
+      bucket (admin-only write).
+- [ ] **Run the corporate expiry reminders migration** (`0017_corporate_expiry_reminders.sql`).
+      Adds **automated expiry reminder emails for corporate sponsors** — two
+      reminders per sponsorship (14 days before expiry and on expiry day), each
+      with a direct link to the renewal form. Adds `reminder_14d_sent` and
+      `reminder_expiry_sent` columns to `corporate_members` to track which
+      reminders have been sent. The cron job
+      `/api/corporate/expiry-reminders` runs daily and sends reminders. Also adds
+      a **Corporate Membership Status check** on the `/join` page where businesses
+      can check their sponsorship status (Pending/Approved/Active/Expired) using
+      business name + ABN + email. Status check form is collapsible by default.
+      Expired (passed expiry date) memberships display as "Expired" status with
+      renewal prompt.
+- [ ] **Run the membership category switching migration** (`0018_category_switch.sql`,
+      requires `0007` and `0009`). Enables members to switch between Single and
+      Family categories mid-membership. The pricing model anchors on the member's
+      existing renewal date and prorates the difference in annual fees for the
+      remaining days — a Single member switching to Family with 275 days left at
+      a $10 difference pays $7.53. Switching keeps the household on one renewal
+      date and prevents fee-drift as members change categories. Accessed via a
+      new UI in the Member Dashboard component (not yet exposed in the site, pending
+      full Member Portal build — it exists in the codebase as stub functionality).
+- [ ] **Run the service member pricing migration** (`0019_service_member_pricing.sql`,
+      requires `0013` and `0004`). Adds **two-tier pricing for service requests**:
+      ABAC members pay **$10**, non-members pay **$45** for Letter of Residency
+      or Character Reference. The member lookup is performed server-side at
+      submission (checking the membership date-of-birth + CID against the database)
+      and the charge amount re-verified in the Stripe webhook before activation.
+      Non-member requests are processed the same way — payment via Stripe first,
+      confirmation email after the webhook confirms payment. Updates the `/services`
+      form to explain the pricing difference and show the applicant's determined
+      rate before they hit Stripe.
 - [ ] **Set up the daily expiry-reminder cron job.** Add a production
       `CRON_SECRET`. `vercel.json` already schedules a daily production call
       to `/api/members/expiry-reminders`; Vercel sends

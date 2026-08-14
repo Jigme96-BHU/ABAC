@@ -47,6 +47,7 @@ export default function StoriesDashboard({ stories }: { stories: StoryRow[] }) {
               <th>Date</th>
               <th>Title</th>
               <th>Photo</th>
+              <th>Video</th>
               <th>Status</th>
               <th></th>
             </tr>
@@ -57,6 +58,7 @@ export default function StoriesDashboard({ stories }: { stories: StoryRow[] }) {
                 <td>{s.date}</td>
                 <td>{s.title}</td>
                 <td>{s.image_path ? "Yes" : "—"}</td>
+                <td>{s.video_path ? "Yes" : "—"}</td>
                 <td>{s.published ? "Published" : "Draft"}</td>
                 <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                   <button

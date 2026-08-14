@@ -15,7 +15,7 @@ export type EventRow = {
   updated_at: string;
 };
 
-/** Shape of a row from the `stories` table (supabase/migrations/0002_stories.sql). */
+/** Shape of a row from the `stories` table (supabase/migrations/0002_stories.sql, extended by 0015_story_videos.sql). */
 export type StoryRow = {
   id: string;
   slug: string;
@@ -26,6 +26,9 @@ export type StoryRow = {
   image_path: string | null; // public Storage URL, not a local /public path
   image_width: number | null;
   image_height: number | null;
+  video_path: string | null; // public Storage URL to MP4/WebM/MOV video
+  video_size: number | null; // bytes
+  video_duration: number | null; // seconds
   published: boolean;
   created_at: string;
   updated_at: string;
@@ -129,6 +132,24 @@ export type DocumentRow = {
   file_name: string; // original filename, shown/used for the download
   file_size: number | null; // bytes
   published: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Shape of a row from the `team_members` table (supabase/migrations/0016_team_members.sql). */
+export type TeamMemberRow = {
+  id: string;
+  name: string;
+  role: string;
+  category: "executive" | "founders" | "advisory" | "former_presidents";
+  email: string | null;
+  phone: string | null;
+  bio: string | null;
+  photo_path: string | null; // public Storage URL
+  display_order: number;
+  active: boolean;
+  term_start: string | null; // yyyy-mm-dd
+  term_end: string | null; // yyyy-mm-dd
   created_at: string;
   updated_at: string;
 };

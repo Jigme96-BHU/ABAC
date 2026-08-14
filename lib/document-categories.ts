@@ -4,6 +4,7 @@
 export const DOCUMENT_CATEGORIES = [
   { value: "constitution", label: "Constitution" },
   { value: "policy", label: "Policies" },
+  { value: "tor", label: "TOR for leadership roles" },
   { value: "financial", label: "Financial reports" },
   { value: "minutes", label: "Minutes" },
   { value: "other", label: "Other" },

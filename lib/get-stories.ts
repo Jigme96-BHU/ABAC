@@ -10,6 +10,7 @@ function fromStoryRow(row: StoryRow): Story {
     image: row.image_path,
     imageWidth: row.image_width ?? undefined,
     imageHeight: row.image_height ?? undefined,
+    video: row.video_path ?? undefined,
     excerpt: row.excerpt,
     // admin's textarea uses blank lines between paragraphs, same convention
     // as the WordPress-migrated stories in content/stories.ts

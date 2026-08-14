@@ -80,7 +80,7 @@ export default async function EventsPage() {
           "Events and Announcements". Same real posts as Stories. */}
       <section className="block alt">
         <div className="wrap">
-          <span className="dz-eyebrow">ལོ་རྒྱུས་དང་གནད་དོན་གཙོ་ཅན།</span>
+          <span className="dz-eyebrow">འདས་པའི་ལས་རིམ་ཚུ་དང་གནད་དོན་གཙོ་ཅན།</span>
           <h2 style={{ fontSize: 32, marginBottom: 6 }}>Past events &amp; highlights</h2>
           <p style={{ color: "var(--ink-soft)", marginBottom: 28, maxWidth: 640 }}>
             Photos and stories from our recent gatherings, celebrations, and milestones.
