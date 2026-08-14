@@ -13,7 +13,7 @@ export default function ContactPage() {
       <section className="block">
         <div className="wrap">
           <div className="form-card">
-            <span className="dz-eyebrow">འབྲེལ་བ།</span>
+            <span className="dz-eyebrow">འབྲེལ་བ་མཛད་གནང་།</span>
             <h2>Contact us</h2>
             <p className="form-sub">
               We respond to every enquiry within 2–3 working days. You&apos;ll get an instant
