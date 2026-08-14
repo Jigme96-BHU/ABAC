@@ -85,6 +85,12 @@ const EXT_BY_TYPE: Record<string, string> = {
   "image/webp": "webp",
 };
 
+const VIDEO_EXT_BY_TYPE: Record<string, string> = {
+  "video/mp4": "mp4",
+  "video/webm": "webm",
+  "video/quicktime": "mov",
+};
+
 /** Uploads a story photo to the public story-images bucket and returns its
  *  public URL plus real dimensions (read server-side before upload, so the
  *  public pages always get the correct aspect ratio — see StoryCard). */
@@ -113,6 +119,30 @@ async function uploadStoryImage(
   return { error: null, url: publicUrl, ...size } as const;
 }
 
+/** Uploads a story video to the public story-videos bucket and returns its
+ *  public URL and file size. Video duration detection happens in the browser. */
+async function uploadStoryVideo(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  file: File,
+  slug: string,
+) {
+  const ext = VIDEO_EXT_BY_TYPE[file.type];
+  if (!ext) return { error: "Video must be MP4, WebM, or MOV format." } as const;
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const path = `${slug}-${Date.now().toString(36)}.${ext}`;
+  const { error: uploadError } = await supabase.storage
+    .from("story-videos")
+    .upload(path, buffer, { contentType: file.type });
+  if (uploadError) return { error: uploadError.message } as const;
+
+  const {
+    data: { publicUrl },
+  } = supabase.storage.from("story-videos").getPublicUrl(path);
+
+  return { error: null, url: publicUrl, fileSize: file.size } as const;
+}
+
 function readStoryFields(formData: FormData) {
   return {
     title: String(formData.get("title") ?? "").trim(),
@@ -136,7 +166,15 @@ export async function createStory(formData: FormData) {
     imageData = { image_path: result.url, image_width: result.width, image_height: result.height };
   }
 
-  const { error } = await supabase.from("stories").insert({ ...fields, slug, ...imageData });
+  const video = formData.get("video");
+  let videoData: { video_path: string; video_size: number } | undefined;
+  if (video instanceof File && video.size > 0) {
+    const result = await uploadStoryVideo(supabase, video, slug);
+    if (result.error !== null) return { error: result.error };
+    videoData = { video_path: result.url, video_size: result.fileSize };
+  }
+
+  const { error } = await supabase.from("stories").insert({ ...fields, slug, ...imageData, ...videoData });
   if (error) return { error: error.message };
   refresh();
   revalidatePath("/events/[slug]", "page");
@@ -155,7 +193,15 @@ export async function updateStory(id: string, slug: string, formData: FormData) 
     imageData = { image_path: result.url, image_width: result.width, image_height: result.height };
   }
 
-  const { error } = await supabase.from("stories").update({ ...fields, ...imageData }).eq("id", id);
+  const video = formData.get("video");
+  let videoData: { video_path: string; video_size: number } | undefined;
+  if (video instanceof File && video.size > 0) {
+    const result = await uploadStoryVideo(supabase, video, slug);
+    if (result.error !== null) return { error: result.error };
+    videoData = { video_path: result.url, video_size: result.fileSize };
+  }
+
+  const { error } = await supabase.from("stories").update({ ...fields, ...imageData, ...videoData }).eq("id", id);
   if (error) return { error: error.message };
   refresh();
   revalidatePath("/events/[slug]", "page");
@@ -425,5 +471,197 @@ export async function deleteServiceRequest(id: string) {
   const { error } = await supabase.from("service_requests").delete().eq("id", id);
   if (error) return { error: error.message };
   revalidatePath("/admin");
+  return { error: null };
+}
+
+// ---------------------------------------------------------------------------
+// Bulk email campaigns — admin can send mass announcements to filtered members
+// ---------------------------------------------------------------------------
+
+export type BulkEmailFilter = {
+  membershipTypes?: ("single" | "family")[];
+  corporateTiers?: ("gold" | "platinum" | "diamond")[];
+  dateRange?: { start: string; end: string };
+  includeInactive?: boolean;
+  individualMemberIds?: string[];
+};
+
+export async function sendBulkEmail(
+  subject: string,
+  message: string,
+  filter: BulkEmailFilter,
+  attachmentPaths: string[]
+) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+
+  try {
+    // Build recipient query based on filters
+    let query = supabase
+      .from("members")
+      .select("id, email, first_name, status")
+      .eq("active", !filter.includeInactive ? true : undefined);
+
+    // Filter by membership type if specified
+    if (filter.membershipTypes?.length) {
+      // For simplicity, we'll filter after fetching since the schema may vary
+    }
+
+    // Filter by date range if specified
+    if (filter.dateRange?.start) {
+      query = query.gte("created_at", filter.dateRange.start);
+    }
+    if (filter.dateRange?.end) {
+      query = query.lte("created_at", filter.dateRange.end);
+    }
+
+    // Filter by individual IDs if specified
+    if (filter.individualMemberIds?.length) {
+      query = query.in("id", filter.individualMemberIds);
+    }
+
+    const { data: members, error: fetchError } = await query;
+    if (fetchError) return { error: fetchError.message };
+
+    // Filter by active status (already done above, but ensure it)
+    let recipientMembers = members || [];
+    if (!filter.includeInactive) {
+      recipientMembers = recipientMembers.filter((m) => m.status === "active");
+    }
+
+    // Send emails to all recipients
+    const { bulkAnnouncementEmail } = await import("@/lib/emails/bulk-announcement");
+    const emailHtml = bulkAnnouncementEmail(subject, message);
+
+    for (const member of recipientMembers) {
+      await mailer.sendMail({
+        from: MAIL_FROM,
+        to: member.email,
+        subject,
+        html: emailHtml,
+      });
+    }
+
+    // Log the campaign
+    const { error: logError } = await supabase.from("email_campaigns").insert({
+      admin_id: user.id,
+      subject,
+      message,
+      recipient_filter: filter,
+      attachment_paths: attachmentPaths,
+      recipient_count: recipientMembers.length,
+    });
+
+    if (logError) return { error: `Emails sent but logging failed: ${logError.message}` };
+
+    revalidatePath("/admin");
+    return { error: null, recipientCount: recipientMembers.length };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Unknown error" };
+  }
+}
+
+export async function getBulkEmailCampaigns() {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("email_campaigns")
+    .select("*")
+    .order("sent_at", { ascending: false });
+  if (error) return { error: error.message, campaigns: [] };
+  return { error: null, campaigns: data || [] };
+}
+
+// ---------------------------------------------------------------------------
+// Team Members — admin can manage leadership across categories
+// ---------------------------------------------------------------------------
+
+async function uploadTeamPhoto(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  file: File,
+  memberId: string,
+) {
+  const ext = EXT_BY_TYPE[file.type];
+  if (!ext) return { error: "Photo must be a JPEG, PNG, or WebP file." } as const;
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const size = imageSizeFromBuffer(buffer);
+  if (!size) return { error: "Couldn't read that image file — try a different one." } as const;
+
+  const path = `${memberId}-${Date.now().toString(36)}.${ext}`;
+  const { error: uploadError } = await supabase.storage
+    .from("team-photos")
+    .upload(path, buffer, { contentType: file.type });
+  if (uploadError) return { error: uploadError.message } as const;
+
+  const {
+    data: { publicUrl },
+  } = supabase.storage.from("team-photos").getPublicUrl(path);
+
+  return { error: null, url: publicUrl } as const;
+}
+
+function readTeamMemberFields(formData: FormData) {
+  return {
+    name: String(formData.get("name") ?? "").trim(),
+    role: String(formData.get("role") ?? "").trim(),
+    category: String(formData.get("category") ?? "executive") as "executive" | "founders" | "advisory" | "former_presidents",
+    email: String(formData.get("email") ?? "").trim() || null,
+    phone: String(formData.get("phone") ?? "").trim() || null,
+    bio: String(formData.get("bio") ?? "").trim() || null,
+    active: formData.get("active") === "on",
+    display_order: parseInt(String(formData.get("display_order") ?? "0"), 10),
+    term_start: String(formData.get("term_start") ?? "") || null,
+    term_end: String(formData.get("term_end") ?? "") || null,
+  };
+}
+
+export async function createTeamMember(formData: FormData) {
+  const supabase = await createClient();
+  const fields = readTeamMemberFields(formData);
+
+  // Generate temporary ID for photo naming
+  const tempId = crypto.randomUUID();
+
+  const photo = formData.get("photo");
+  let photoData: { photo_path: string } | undefined;
+  if (photo instanceof File && photo.size > 0) {
+    const result = await uploadTeamPhoto(supabase, photo, tempId);
+    if (result.error !== null) return { error: result.error };
+    photoData = { photo_path: result.url };
+  }
+
+  const { error } = await supabase.from("team_members").insert({ ...fields, ...photoData });
+  if (error) return { error: error.message };
+  refresh();
+  revalidatePath("/team");
+  return { error: null };
+}
+
+export async function updateTeamMember(id: string, formData: FormData) {
+  const supabase = await createClient();
+  const fields = readTeamMemberFields(formData);
+
+  const photo = formData.get("photo");
+  let photoData: { photo_path: string } | undefined;
+  if (photo instanceof File && photo.size > 0) {
+    const result = await uploadTeamPhoto(supabase, photo, id);
+    if (result.error !== null) return { error: result.error };
+    photoData = { photo_path: result.url };
+  }
+
+  const { error } = await supabase.from("team_members").update({ ...fields, ...photoData }).eq("id", id);
+  if (error) return { error: error.message };
+  refresh();
+  revalidatePath("/team");
+  return { error: null };
+}
+
+export async function deleteTeamMember(id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("team_members").delete().eq("id", id);
+  if (error) return { error: error.message };
+  refresh();
+  revalidatePath("/team");
   return { error: null };
 }

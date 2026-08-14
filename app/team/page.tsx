@@ -4,6 +4,8 @@ import Image from "next/image";
 import { ADVISORY_BOARD, EXECUTIVE, FORMER_PRESIDENTS } from "@/content/team";
 import { FOUNDERS } from "@/content/founders";
 import FormerPresidents from "@/components/FormerPresidents";
+import { getTeamMembersByCategory, CATEGORY_LABELS } from "@/lib/get-team-members";
+import type { TeamMemberRow } from "@/lib/supabase/types";
 
 export const metadata: Metadata = {
   title: "Our leadership team",
@@ -94,11 +96,43 @@ function orbitPosition(index: number, total: number): OrbitStyle {
   };
 }
 
-export default function TeamPage() {
-  const president = EXECUTIVE.find((p) => p.role === "President");
-  const executiveMembers = EXECUTIVE.filter((p) => p !== president);
-  const advisoryChairperson = ADVISORY_BOARD.find((p) => p.role === "Chairperson");
-  const advisoryMembers = ADVISORY_BOARD.filter((p) => p !== advisoryChairperson);
+function teamMemberToPersonCard(member: TeamMemberRow): TeamPerson {
+  return {
+    name: member.name,
+    role: member.role,
+    bio: member.bio || undefined,
+    image: member.photo_path,
+  };
+}
+
+export default async function TeamPage() {
+  const teamByCategory = await getTeamMembersByCategory();
+
+  // Get executive members from database, fallback to static content
+  const executiveMembers = teamByCategory.executive.length > 0
+    ? teamByCategory.executive.map(teamMemberToPersonCard)
+    : EXECUTIVE;
+
+  const president = executiveMembers.find((p) => p.role === "President");
+  const otherExecutive = executiveMembers.filter((p) => p !== president);
+
+  // Get advisory board from database, fallback to static content
+  const advisoryMembers = teamByCategory.advisory.length > 0
+    ? teamByCategory.advisory.map(teamMemberToPersonCard)
+    : ADVISORY_BOARD;
+
+  const advisoryChairperson = advisoryMembers.find((p) => p.role === "Chairperson");
+  const otherAdvisory = advisoryMembers.filter((p) => p !== advisoryChairperson);
+
+  // Get founders from database, fallback to static content
+  const founders = teamByCategory.founders.length > 0
+    ? teamByCategory.founders.map(teamMemberToPersonCard)
+    : FOUNDERS.map((f) => ({ name: f.name, role: "Founder", image: f.image }));
+
+  // Former presidents use static content (they include historical tenure/founder data
+  // that's not stored in the live database). Database team_members can still be added
+  // via admin, but are not displayed in the former presidents section by design.
+  const formerPresidents = FORMER_PRESIDENTS;
 
   return (
     <main>
@@ -125,18 +159,18 @@ export default function TeamPage() {
                 <PersonCard
                   p={president}
                   index={0}
-                  key={president.slug}
+                  key={president.name}
                   variant="executive"
                   featured
                 />
               </div>
             )}
             <div className="exec-grid">
-              {executiveMembers.map((p, index) => (
+              {otherExecutive.map((p, index) => (
                 <PersonCard
                   p={p}
                   index={index + 1}
-                  key={p.slug}
+                  key={p.name}
                   variant="executive"
                 />
               ))}
@@ -153,17 +187,17 @@ export default function TeamPage() {
                 <PersonCard
                   p={advisoryChairperson}
                   index={0}
-                  key={advisoryChairperson.slug}
+                  key={advisoryChairperson.name}
                   variant="advisoryCenter"
                 />
               </div>
             )}
             <div className="advisory-ring">
-              {advisoryMembers.map((p, index) => (
+              {otherAdvisory.map((p, index) => (
                 <div
                   className="advisory-orbit-slot"
-                  style={orbitPosition(index, advisoryMembers.length)}
-                  key={p.slug}
+                  style={orbitPosition(index, otherAdvisory.length)}
+                  key={p.name}
                 >
                   <PersonCard p={p} index={index + 1} variant="orbit" />
                 </div>
@@ -176,11 +210,11 @@ export default function TeamPage() {
             <h2>Founders</h2>
           </div>
           <div className="team-grid">
-            {FOUNDERS.map((p, index) => (
+            {founders.map((p, index) => (
               <PersonCard
-                p={{ name: p.name, role: "Founder", image: p.image }}
+                p={p}
                 index={index}
-                key={p.slug}
+                key={p.name}
               />
             ))}
           </div>
@@ -193,7 +227,7 @@ export default function TeamPage() {
               the Association since its founding.
             </p>
           </div>
-          <FormerPresidents people={FORMER_PRESIDENTS} />
+          <FormerPresidents people={formerPresidents} />
         </div>
       </section>
     </main>

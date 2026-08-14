@@ -4,6 +4,7 @@ import JoinForm from "@/components/JoinForm";
 import StatusCheckForm from "@/components/StatusCheckForm";
 import MembershipRegistration from "@/components/MembershipRegistration";
 import CorporateForm from "@/components/CorporateForm";
+import CorporateStatusCheck from "@/components/CorporateStatusCheck";
 import SwitchCategoryForm from "@/components/SwitchCategoryForm";
 
 export const metadata: Metadata = {
@@ -86,7 +87,15 @@ export default function JoinPage() {
                   </p>
                 </div>
               }
-              corporate={<CorporateForm />}
+              corporate={
+                <div>
+                  <CorporateStatusCheck />
+
+                  <div style={{ marginTop: 24 }}>
+                    <CorporateForm />
+                  </div>
+                </div>
+              }
             />
           </div>
         </div>

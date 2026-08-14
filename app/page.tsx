@@ -149,7 +149,7 @@ export default async function HomePage() {
           >
             <div>
               <span className="dz-eyebrow">ལོ་རྒྱུས་དང་གནད་དོན་གཙོ་ཅན།</span>
-              <h2>Stories and highlights</h2>
+              <h2>Stories & Highlights</h2>
             </div>
             <Link className="btn btn-ghost btn-sm" href="/events">
               See all events
@@ -166,12 +166,20 @@ export default async function HomePage() {
       <section className="block">
         <div className="wrap">
           <div className="section-head">
-            <span className="dz-eyebrow">ཞབས་ཏོག</span>
-            <h2>What membership gives you</h2>
+            <span className="dz-eyebrow">འཐུས་མིའི་ཁེ་དབང་།</span>
+            <h2>The Privileges of Membership</h2>
           </div>
           <div className="grid3">
             <div className="card">
-              <div className="ic">☸</div>
+              <div className="ic benefit-knot">
+                <Image
+                  src="/img/symbols/old-man-longevity-bullet.png"
+                  alt="Community & welfare support"
+                  width={36}
+                  height={36}
+                  style={{ width: "36px", height: "36px" }}
+                />
+              </div>
               <h3>Community &amp; welfare support</h3>
               <p>
                 Mutual support during settlement, illness, bereavement, and emergencies,
@@ -180,16 +188,30 @@ export default async function HomePage() {
               </p>
             </div>
             <div className="card">
-              <div className="ic">༄</div>
-              <h3>Culture, language &amp; heritage</h3>
+              <div className="ic benefit-knot">
+                <Image
+                  src="/img/symbols/rock-longevity-bullet.png"
+                  alt="Language, heritage & Culture"
+                  width={36}
+                  height={36}
+                  style={{ width: "36px", height: "36px" }}
+                />
+              </div>
+              <h3>Language, heritage &amp; Culture</h3>
               <p>
-                Promotes Dzongkha language learning, Losar and Blessed Rainy Day
-                celebrations, traditional arts, and support for the Bhutanese Buddhist &amp;
-                Cultural Centre.
+                Actively supports the Dzongkha language learning, traditional arts, national celebrations, spiritual heritages, and social development.
               </p>
             </div>
             <div className="card">
-              <div className="ic">འ</div>
+              <div className="ic benefit-knot">
+                <Image
+                  src="/img/symbols/tree-longevity-bullet.png"
+                  alt="Events & member activities"
+                  width={36}
+                  height={36}
+                  style={{ width: "36px", height: "36px" }}
+                />
+              </div>
               <h3>Events &amp; member activities</h3>
               <p>
                 Cultural, social, sporting, and educational events, plus member-only programs
@@ -197,7 +219,15 @@ export default async function HomePage() {
               </p>
             </div>
             <div className="card">
-              <div className="ic">⚖</div>
+              <div className="ic benefit-knot">
+                <Image
+                  src="/img/symbols/crane-longevity-bullet.png"
+                  alt="A voice in the association"
+                  width={36}
+                  height={36}
+                  style={{ width: "36px", height: "36px" }}
+                />
+              </div>
               <h3>A voice in the association</h3>
               <p>
                 Attend and vote at Annual General Meetings, stand for elected office where
@@ -206,7 +236,15 @@ export default async function HomePage() {
               </p>
             </div>
             <div className="card">
-              <div className="ic">✦</div>
+              <div className="ic benefit-knot">
+                <Image
+                  src="/img/symbols/deer-longevity-bullet.png"
+                  alt="Leadership & volunteering"
+                  width={36}
+                  height={36}
+                  style={{ width: "36px", height: "36px" }}
+                />
+              </div>
               <h3>Leadership &amp; volunteering</h3>
               <p>
                 Leadership and professional-development initiatives, hands-on volunteering
@@ -215,7 +253,15 @@ export default async function HomePage() {
               </p>
             </div>
             <div className="card">
-              <div className="ic">⚭</div>
+              <div className="ic benefit-knot">
+                <Image
+                  src="/img/symbols/water-longevity-bullet.png"
+                  alt="A fair, connected community"
+                  width={36}
+                  height={36}
+                  style={{ width: "36px", height: "36px" }}
+                />
+              </div>
               <h3>A fair, connected community</h3>
               <p>
                 Networking with fellow members, and a guarantee of fair, respectful treatment
@@ -239,7 +285,7 @@ export default async function HomePage() {
             }}
           >
             <div>
-              <span className="dz-eyebrow">ལས་རིམ།</span>
+              <span className="dz-eyebrow">ཤུལ་མའི་ལས་རིམ།</span>
               <h2>Upcoming events</h2>
             </div>
             <Link className="btn btn-ghost btn-sm" href="/events">
@@ -265,8 +311,7 @@ export default async function HomePage() {
               </span>
               <h2>Become a member</h2>
               <p>
-                Join the ABAC family — registration takes two minutes and your membership is
-                active instantly.
+                Join the ABAC — registration takes two minutes and your membership is active instantly.
               </p>
             </div>
             <Link className="btn btn-gold" href="/join">

@@ -10,6 +10,7 @@ import type {
   VolunteerRow,
   CorporateMemberRow,
   ServiceRequestRow,
+  TeamMemberRow,
 } from "@/lib/supabase/types";
 
 export const metadata: Metadata = {
@@ -76,6 +77,7 @@ export default async function AdminPage() {
     { data: volunteers },
     { data: corporateMembers },
     { data: serviceRequests },
+    { data: teamMembers },
   ] = await Promise.all([
     supabase.from("events").select("*").order("date", { ascending: true }).returns<EventRow[]>(),
     supabase.from("stories").select("*").order("date", { ascending: false }).returns<StoryRow[]>(),
@@ -99,6 +101,12 @@ export default async function AdminPage() {
       .select("*")
       .order("created_at", { ascending: false })
       .returns<ServiceRequestRow[]>(),
+    supabase
+      .from("team_members")
+      .select("*")
+      .order("category", { ascending: true })
+      .order("display_order", { ascending: true })
+      .returns<TeamMemberRow[]>(),
   ]);
 
   return (
@@ -129,6 +137,7 @@ export default async function AdminPage() {
             volunteers={volunteers ?? []}
             corporateMembers={corporateMembers ?? []}
             serviceRequests={serviceRequests ?? []}
+            teamMembers={teamMembers ?? []}
           />
         </div>
       </section>

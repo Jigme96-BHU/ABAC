@@ -64,7 +64,7 @@ export default function RoyalPortrait() {
         <Corner position="bl" />
         <Corner position="br" />
 
-        <p className="royal-hon">མི་དབང་མངའ་བདག་རིན་པོ་ཆེ།</p>
+        <p className="royal-hon">དཔལ་མི་དབང་མངའ་བདག་རིན་པོ་ཆེ།</p>
 
         <div className="royal-frame">
           <div className="royal-frame-inner">

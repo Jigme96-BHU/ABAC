@@ -651,3 +651,51 @@ export async function submitCorporateApplication(formData: FormData): Promise<Co
 
   return { ok: true };
 }
+
+// ---------------------------------------------------------------------------
+// Corporate Membership Status Check
+// ---------------------------------------------------------------------------
+
+export type CorporateStatusResult = {
+  found: boolean;
+  status?: "pending" | "approved" | "active" | "inactive" | "rejected";
+  tier?: "diamond" | "platinum" | "gold";
+  joined_at?: string;
+  expires_at?: string | null;
+  error?: string;
+};
+
+export async function checkCorporateStatus(
+  businessName: string,
+  abn: string,
+  email: string
+): Promise<CorporateStatusResult> {
+  if (!businessName.trim() || !abn.trim() || !email.trim()) {
+    return { found: false, error: "Please enter business name, ABN, and email." };
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("corporate_members")
+    .select("status, tier, joined_at, expires_at")
+    .eq("business_name", businessName.trim())
+    .eq("abn", abn.trim())
+    .eq("email", email.trim())
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") {
+      // No rows found
+      return { found: false, error: "No corporate membership found with those details." };
+    }
+    return { found: false, error: error.message };
+  }
+
+  return {
+    found: true,
+    status: data.status,
+    tier: data.tier,
+    joined_at: data.joined_at,
+    expires_at: data.expires_at,
+  };
+}
