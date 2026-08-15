@@ -215,6 +215,14 @@ export default function CorporateForm() {
         </label>
         <input id="c-certificate" name="business_certificate" type="file" accept="application/pdf,image/jpeg,image/png" />
 
+        <label className="f" htmlFor="c-logo">
+          Business Logo{" "}
+          <span style={{ fontWeight: 400, color: "var(--ink-soft)" }}>
+            (optional, PNG/JPG/WebP/SVG/GIF — shown on Our Partners once your sponsorship is active)
+          </span>
+        </label>
+        <input id="c-logo" name="logo" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif" />
+
         <label className="consent" style={{ marginTop: 20 }}>
           <input type="checkbox" required />I confirm these details are accurate and agree to
           the <a href="/privacy">privacy statement</a>.

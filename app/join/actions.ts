@@ -618,6 +618,14 @@ const CERTIFICATE_EXT_BY_TYPE: Record<string, string> = {
   "image/png": "png",
 };
 
+const LOGO_EXT_BY_TYPE: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/svg+xml": "svg",
+  "image/gif": "gif",
+};
+
 export async function submitCorporateApplication(formData: FormData): Promise<CorporateSubmitResult> {
   const businessName = String(formData.get("business_name") ?? "").trim();
   const abn = String(formData.get("abn") ?? "").trim();
@@ -656,6 +664,32 @@ export async function submitCorporateApplication(formData: FormData): Promise<Co
     certificatePath = `${id}-certificate.${ext}`;
   }
 
+  // Logo is optional too — an applicant who doesn't have one on hand yet
+  // can still add it later, either by contacting the committee or (once
+  // active) it's the same public bucket the admin dashboard's own logo
+  // upload/replace tool already writes to, so this "auto-uploads with the
+  // business name" the moment get_active_corporate_partners() starts
+  // returning this row — no separate wiring needed on the /partners side.
+  let logoPath: string | null = null;
+  const logo = formData.get("logo");
+  if (logo instanceof File && logo.size > 0) {
+    const ext = LOGO_EXT_BY_TYPE[logo.type];
+    if (!ext) return { ok: false, error: "Business Logo must be a PNG, JPG, WebP, SVG, or GIF file." };
+
+    const logoId = crypto.randomUUID();
+    const buffer = Buffer.from(await logo.arrayBuffer());
+    const path = `corporate-${logoId}.${ext}`;
+    const { error: uploadError } = await supabase.storage
+      .from("corporate-logos")
+      .upload(path, buffer, { contentType: logo.type });
+    if (uploadError) return { ok: false, error: uploadError.message };
+
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from("corporate-logos").getPublicUrl(path);
+    logoPath = publicUrl;
+  }
+
   const { error } = await supabase.from("corporate_members").insert({
     business_name: businessName,
     abn: abn || null,
@@ -668,6 +702,7 @@ export async function submitCorporateApplication(formData: FormData): Promise<Co
     notes: notes || null,
     tier,
     business_certificate_path: certificatePath,
+    logo_path: logoPath,
   });
   if (error) return { ok: false, error: error.message };
 

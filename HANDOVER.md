@@ -253,6 +253,15 @@ The site must not replace the live WordPress one until all of these are done.
       — dimensions aren't read for HEIC/HEIF/AVIF (no parser for those
       container formats), so those degrade to a placeholder tile rather than
       breaking, a known/documented gap.
+- [ ] **Run the corporate logo public-upload migration**
+      (`0025_corporate_logo_public_upload.sql`, requires `0012`). Lets a
+      corporate applicant attach their logo directly on the public
+      registration form (`components/CorporateForm.tsx`), instead of only
+      after the committee approves them — it's stored immediately and shows
+      up on `/partners` automatically once the sponsorship goes active
+      (`get_active_corporate_partners()` already returns `logo_path`, no
+      other wiring needed). Admins can still replace or remove it from the
+      Corporate tab in `/admin` at any point.
 - [ ] **Set up the daily expiry-reminder cron job.** Add a production
       `CRON_SECRET`. `vercel.json` already schedules a daily production call
       to `/api/members/expiry-reminders`; Vercel sends
