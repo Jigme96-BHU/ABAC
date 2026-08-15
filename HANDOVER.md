@@ -79,49 +79,54 @@ The site must not replace the live WordPress one until all of these are done.
       with the 9 migrated WordPress stories.
 - [x] **Run the members database migration** (`0003_members.sql`) — done,
       confirmed 2026-07-26.
-- [ ] **Run the member-number migration** (`0004_member_number.sql`). Adds
+- [x] **Run the member-number migration** (`0004_member_number.sql`) — done,
+      confirmed 2026-08-15. Adds
       the auto-assigned `member_no` column and updates the confirmation
       lookup `/join/success` uses to display it — same SQL Editor as the
       others.
 - [x] **Run the check-my-status migration** (`0005_check_status.sql`) — done,
       confirmed 2026-07-26.
-- [ ] **Re-run the notification-email migration** (`0006_member_notification.sql`)
-      — it now has an explicit `DROP FUNCTION` before recreating it. Without
-      that drop, `CREATE OR REPLACE` can't add new return columns to an
-      already-existing function, so an earlier run of this file left the
-      old 4-column version in place — the real cause of the welcome email
-      showing "$NaN" for the fee and "—" for the expiry. Confirmed fixed
-      2026-07-26; if you already ran an older copy, you must run this one
-      again, the same "run it again is safe" logic used elsewhere does not
-      cover this specific kind of change.
-- [ ] **Run the membership-renewals migration** (`0007_membership_renewals.sql`).
-      This makes membership numbers permanent: future renewals match the
-      existing member by date of birth + CID, extend `expires_at`, and send a
-      renewal email instead of creating a second membership number.
-- [ ] **Run the expiry-reminders migration** (`0008_membership_expiry_reminders.sql`).
-      This adds the database fields/functions for automated reminder emails:
-      one 14 days before expiry and one on the expiry date.
-- [ ] **Run the family-membership migration** (`0009_family_membership.sql`,
-      requires `0007` and `0008` above). Adds the **Family Membership**
+- [x] **Re-run the notification-email migration** (`0006_member_notification.sql`)
+      — done, confirmed 2026-08-15. It now has an explicit `DROP FUNCTION`
+      before recreating it. Without that drop, `CREATE OR REPLACE` can't add
+      new return columns to an already-existing function, so an earlier run
+      of this file left the old 4-column version in place — the real cause
+      of the welcome email showing "$NaN" for the fee and "—" for the
+      expiry.
+- [x] **Run the membership-renewals migration** (`0007_membership_renewals.sql`)
+      — done, confirmed 2026-08-15. This makes membership numbers permanent:
+      future renewals match the existing member by date of birth + CID,
+      extend `expires_at`, and send a renewal email instead of creating a
+      second membership number.
+- [x] **Run the expiry-reminders migration** (`0008_membership_expiry_reminders.sql`)
+      — done, confirmed 2026-08-15 (fixed an `order by member_id` bug in the
+      `get_members_due_for_expiry_reminders` function — the select list
+      wasn't aliasing `m.id` to `member_id`, so Postgres couldn't resolve it
+      in the ORDER BY; fixed in the migration file itself). This adds the
+      database fields/functions for automated reminder emails: one 14 days
+      before expiry and one on the expiry date.
+- [x] **Run the family-membership migration** (`0009_family_membership.sql`,
+      requires `0007` and `0008` above) — done, confirmed 2026-08-15. Adds
+      the **Family Membership**
       category from the 2026 Membership Policy: parent(s) + dependent
       children under 18 for a flat **$30/year** (vs $20/year Single), each
       adult individually recorded with their own DOB/CID and own confirmation
       email. `/join` now offers both categories side by side.
-- [ ] **Run the documents migration** (`0010_documents.sql`, requires `0001`).
-      Adds the **Policies & Documents** library: a "Documents" tab in
+- [x] **Run the documents migration** (`0010_documents.sql`, requires `0001`)
+      — done, confirmed 2026-08-15. Adds the **Policies & Documents** library: a "Documents" tab in
       `/admin` for uploading PDF/DOC/DOCX files (Constitution, Membership
       Policy, financial reports, minutes), and a public `/documents` page
       (linked from the footer) grouping published documents by category for
       viewing/downloading.
-- [ ] **Run the volunteers migration** (`0011_volunteers.sql`, requires
-      `0001`). Adds a public `/volunteers` registration form (Name, Sex,
+- [x] **Run the volunteers migration** (`0011_volunteers.sql`, requires
+      `0001`) — done, confirmed 2026-08-15. Adds a public `/volunteers` registration form (Name, Sex,
       CID, DOB, phone, email — plus parent/guardian name, phone, email, and
       a consent checkbox when the volunteer is under 18), linked from the
       footer above Donate. Submissions are admin-only (same private-data
       model as `members`, not publicly readable) and appear in a new
       "Volunteers" tab in `/admin`, including a CSV export.
-- [ ] **Run the corporate membership migration** (`0012_corporate_membership.sql`,
-      requires `0001`). Adds **Corporate Membership** (Diamond / Platinum /
+- [x] **Run the corporate membership migration** (`0012_corporate_membership.sql`,
+      requires `0001`) — done, confirmed 2026-08-15. Adds **Corporate Membership** (Diamond / Platinum /
       Gold) — `/join` now leads with a Community vs Corporate choice, the
       existing Single/Family flow sits under Community unchanged. Corporate
       applications are **not** self-serve: they land as `pending` in a new
@@ -137,8 +142,8 @@ The site must not replace the live WordPress one until all of these are done.
       once the committee confirms real amounts. Tier benefits shown on the
       public form are also drafts pending committee sign-off (see
       `components/CorporateForm.tsx`'s `TIER_BENEFITS`).
-- [ ] **Run the service requests migration** (`0013_service_requests.sql`,
-      requires `0001`). Adds paid **Letter of Residency** and **Character
+- [x] **Run the service requests migration** (`0013_service_requests.sql`,
+      requires `0001`) — done, confirmed 2026-08-15. Adds paid **Letter of Residency** and **Character
       Reference** requests to `/services`, replacing the old "not available
       yet, contact us" stub. Requesters upload a passport (required) plus
       optional visa/license/proof-of-residency, pay **$10** via Stripe, and
@@ -148,8 +153,8 @@ The site must not replace the live WordPress one until all of these are done.
       (unlike every other bucket in this project), so admins can only view
       uploaded documents via a short-lived signed URL from the new
       "Services" tab in `/admin`, never a public link.
-- [ ] **Run the bulk email campaigns migration** (`0014_email_campaigns.sql`,
-      requires `0001`). Adds the **Email** tab in `/admin` where the committee
+- [x] **Run the bulk email campaigns migration** (`0014_email_campaigns.sql`,
+      requires `0001`) — done, confirmed 2026-08-15. Adds the **Email** tab in `/admin` where the committee
       can send mass announcements to filtered members. Filters include:
       membership type (Single/Family), corporate tier (Gold/Platinum/Diamond),
       date range (joined between X and Y), active/inactive status, and
@@ -158,8 +163,8 @@ The site must not replace the live WordPress one until all of these are done.
       many people). Emails are sent immediately on submission and recorded in
       the `email_campaigns` table. Supports optional attachments (though the
       attachment upload UI is not yet wired to Storage).
-- [ ] **Run the story videos migration** (`0015_story_videos.sql`, requires
-      `0002_stories.sql`). Extends the **Stories** feature with optional
+- [x] **Run the story videos migration** (`0015_story_videos.sql`, requires
+      `0002_stories.sql`) — done, confirmed 2026-08-15. Extends the **Stories** feature with optional
       **video uploads** (MP4, WebM, or MOV format). Each story can now have
       both a photo *and* a video (both optional). Admin form includes video
       file input and a preview player showing the current video. Videos are
@@ -167,8 +172,8 @@ The site must not replace the live WordPress one until all of these are done.
       public story detail pages with HTML5 video controls. Video duration
       detection happens in the browser; the admin sees the uploaded file size.
       Kept under **3–4MB per story** to minimize bandwidth costs.
-- [ ] **Run the team members migration** (`0016_team_members.sql`, requires
-      `0001`). Enables **admin management of the Leadership page** — adds a
+- [x] **Run the team members migration** (`0016_team_members.sql`, requires
+      `0001`) — done, confirmed 2026-08-15. Enables **admin management of the Leadership page** — adds a
       "Team" tab in `/admin` where the committee can add/edit/remove team
       members across four categories: Executive, Founders, Advisory Board, and
       Former Presidents. Each member record includes name, role/title, optional
@@ -178,8 +183,8 @@ The site must not replace the live WordPress one until all of these are done.
       but they now scale dynamically — no fixed blank spots, responsive to
       member count changes. Photos stored in a public `team-photos` Storage
       bucket (admin-only write).
-- [ ] **Run the corporate expiry reminders migration** (`0017_corporate_expiry_reminders.sql`).
-      Adds **automated expiry reminder emails for corporate sponsors** — two
+- [x] **Run the corporate expiry reminders migration** (`0017_corporate_expiry_reminders.sql`)
+      — done, confirmed 2026-08-15. Adds **automated expiry reminder emails for corporate sponsors** — two
       reminders per sponsorship (14 days before expiry and on expiry day), each
       with a direct link to the renewal form. Adds `reminder_14d_sent` and
       `reminder_expiry_sent` columns to `corporate_members` to track which
@@ -190,8 +195,8 @@ The site must not replace the live WordPress one until all of these are done.
       business name + ABN + email. Status check form is collapsible by default.
       Expired (passed expiry date) memberships display as "Expired" status with
       renewal prompt.
-- [ ] **Run the membership category switching migration** (`0018_category_switch.sql`,
-      requires `0007` and `0009`). Enables members to switch between Single and
+- [x] **Run the membership category switching migration** (`0018_category_switch.sql`,
+      requires `0007` and `0009`) — done, confirmed 2026-08-15. Enables members to switch between Single and
       Family categories mid-membership. The pricing model anchors on the member's
       existing renewal date and prorates the difference in annual fees for the
       remaining days — a Single member switching to Family with 275 days left at
@@ -199,8 +204,8 @@ The site must not replace the live WordPress one until all of these are done.
       date and prevents fee-drift as members change categories. Live on `/join`
       behind an "Already a member? Switch category" disclosure
       (`components/SwitchCategoryForm.tsx`).
-- [ ] **Run the service member pricing migration** (`0019_service_member_pricing.sql`,
-      requires `0013` and `0004`). Adds **two-tier pricing for service requests**:
+- [x] **Run the service member pricing migration** (`0019_service_member_pricing.sql`,
+      requires `0013` and `0004`) — done, confirmed 2026-08-15. Adds **two-tier pricing for service requests**:
       ABAC members pay **$10**, non-members pay **$45** for Letter of Residency
       or Character Reference. The member lookup is performed server-side at
       submission (checking the membership date-of-birth + CID against the database)
