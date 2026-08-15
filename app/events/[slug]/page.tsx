@@ -69,6 +69,35 @@ export default async function EventStoryPage({ params }: Props) {
             />
           )}
 
+          {story.images && story.images.length > 0 && (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
+                gap: 10,
+                marginBottom: 26,
+              }}
+            >
+              {story.images.map((img, i) => (
+                <Image
+                  key={img.path}
+                  src={img.path}
+                  alt=""
+                  width={img.width ?? 400}
+                  height={img.height ?? 260}
+                  sizes="(max-width: 800px) 45vw, 240px"
+                  style={{
+                    width: "100%",
+                    height: "auto",
+                    borderRadius: 10,
+                    border: "1px solid var(--line)",
+                  }}
+                  loading={i < 2 ? "eager" : "lazy"}
+                />
+              ))}
+            </div>
+          )}
+
           {story.video && (
             <video
               controls

@@ -19,25 +19,25 @@ export function corporateApprovedEmail({
   /** already formatted, e.g. "17 Jul 2027" */
   validUntil: string;
 }) {
-  const subject = "Welcome, ABAC Corporate Partner!";
+  const subject = "Welcome to ABAC Corporate Membership";
 
   const text = `Dear ${contactName},
 
-Congratulations, and thank you — ${businessName} is now an ABAC Corporate Member at ${tier} tier!
+On behalf of the Australia–Bhutan Association of Canberra, we are pleased to confirm that
+${businessName} is now an ABAC Corporate Member at ${tier} tier.
 
-On behalf of the committee and the whole Bhutanese community in Canberra, thank you for your
-generous support. Partners like ${businessName} make ABAC's cultural programs, welfare support,
-and community events possible.
+We sincerely thank you for your support. Partnerships such as this make ABAC's cultural
+programs, welfare support, and community events possible.
 
 Membership tier: ${tier}
 Membership fee: ${fee}
 Valid until: ${validUntil}
 
-Our committee will be in touch shortly about your listing on ABAC's Our Partners page and any
-recognition included at your tier. If you have a logo you'd like featured, just reply to this
-email.
+Our committee will be in touch shortly regarding your listing on ABAC's Our Partners page and
+any recognition included at your tier. If you would like to provide a logo for this listing,
+please reply to this email.
 
-Tashi Delek, and thank you again,
+Tashi Delek,
 ABAC Committee
 bhutancanberra@gmail.com`;
 
@@ -50,13 +50,13 @@ bhutancanberra@gmail.com`;
   const body = `
     <p style="margin:0 0 16px;color:${COLOR.ink};font-size:15px">Dear ${escapeHtml(contactName)},</p>
     <p style="margin:0 0 20px;color:${COLOR.ink};font-size:15px;line-height:1.6">
-      <strong>Congratulations, and thank you</strong> — ${escapeHtml(businessName)} is now an
-      ABAC Corporate Member at <strong>${escapeHtml(tier)} tier</strong>!
+      On behalf of the Australia&ndash;Bhutan Association of Canberra, we are pleased to confirm
+      that ${escapeHtml(businessName)} is now an ABAC Corporate Member at
+      <strong>${escapeHtml(tier)} tier</strong>.
     </p>
     <p style="margin:0 0 24px;color:${COLOR.ink};font-size:15px;line-height:1.6">
-      On behalf of the committee and the whole Bhutanese community in Canberra, thank you for
-      your generous support. Partners like ${escapeHtml(businessName)} make ABAC&rsquo;s cultural
-      programs, welfare support, and community events possible.
+      We sincerely thank you for your support. Partnerships such as this make ABAC&rsquo;s
+      cultural programs, welfare support, and community events possible.
     </p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid ${COLOR.line};border-radius:8px">
       ${row("Membership tier", escapeHtml(tier))}
@@ -64,13 +64,13 @@ bhutancanberra@gmail.com`;
       ${row("Valid until", escapeHtml(validUntil), true)}
     </table>
     <p style="margin:20px 0;color:${COLOR.inkSoft};font-size:13.5px;line-height:1.7">
-      Our committee will be in touch shortly about your listing on ABAC&rsquo;s
+      Our committee will be in touch shortly regarding your listing on ABAC&rsquo;s
       <a href="https://bhutaneseincanberra.org.au/partners" style="color:${COLOR.navy}">Our Partners</a>
-      page and any recognition included at your tier. If you have a logo you&rsquo;d like
-      featured, just reply to this email.
+      page and any recognition included at your tier. If you would like to provide a logo for
+      this listing, please reply to this email.
     </p>
     <p style="margin:0;color:${COLOR.ink};font-size:14px">
-      Tashi Delek, and thank you again,<br />
+      Tashi Delek,<br />
       <strong>ABAC Committee</strong><br />
       <a href="mailto:bhutancanberra@gmail.com" style="color:${COLOR.navy}">bhutancanberra@gmail.com</a>
     </p>`;

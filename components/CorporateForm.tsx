@@ -210,6 +210,11 @@ export default function CorporateForm() {
         </label>
         <textarea id="c-notes" name="notes" rows={3} placeholder="e.g. sponsorship ideas, event interests" />
 
+        <label className="f" htmlFor="c-certificate">
+          Business Certificate <span style={{ fontWeight: 400, color: "var(--ink-soft)" }}>(optional, PDF/JPG/PNG)</span>
+        </label>
+        <input id="c-certificate" name="business_certificate" type="file" accept="application/pdf,image/jpeg,image/png" />
+
         <label className="consent" style={{ marginTop: 20 }}>
           <input type="checkbox" required />I confirm these details are accurate and agree to
           the <a href="/privacy">privacy statement</a>.

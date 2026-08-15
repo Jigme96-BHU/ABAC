@@ -73,26 +73,46 @@ const DOCUMENT_EXT_BY_TYPE: Record<string, string> = {
   "image/png": "png",
 };
 
-/** Uploads one ID document to the private service-documents bucket and
- *  returns its storage path — never a public URL, since this bucket isn't
- *  public. Admins read it back later via a short-lived signed URL. */
-async function uploadServiceDocument(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  file: File,
-  requestId: string,
-  field: string
-): Promise<{ error: string | null; path?: string }> {
-  const ext = DOCUMENT_EXT_BY_TYPE[file.type];
-  if (!ext) return { error: `${field} must be a PDF, JPG, or PNG file.` };
+export const SERVICE_DOCUMENT_FIELDS = ["passport", "visa", "photo_id", "proof_of_residency"] as const;
+export type ServiceDocumentField = (typeof SERVICE_DOCUMENT_FIELDS)[number];
 
-  const buffer = Buffer.from(await file.arrayBuffer());
+/** 3MB per file — enforced client-side before any upload starts (see
+ *  ServiceRequestForm.tsx), and again by Storage itself via the bucket's
+ *  file_size_limit (0020_admin_search_and_upload_limits.sql), so a tampered
+ *  client can't smuggle a larger file past the visible check. */
+export const SERVICE_DOCUMENT_MAX_BYTES = 3 * 1024 * 1024;
+
+/** Mints a request id up front so every document a requester uploads —
+ *  before the request row itself exists — can share one stable prefix in
+ *  Storage. Nothing is written to the database yet; that only happens once
+ *  submitServiceRequest actually inserts the row. */
+export async function beginServiceRequest(): Promise<{ requestId: string }> {
+  return { requestId: crypto.randomUUID() };
+}
+
+/** Direct-to-storage upload, step 1: a signed upload URL the browser can PUT
+ *  straight to Supabase Storage, bypassing this server action's own request
+ *  body entirely. Necessary because up to 4 documents in one submission can
+ *  exceed Vercel's serverless request-body ceiling even when each file is
+ *  well under the 3MB-per-file rule — the old synchronous upload used to
+ *  route every byte through this function's own request, which is exactly
+ *  what hit that ceiling. The `service-documents` bucket's insert policy has
+ *  no admin gate (`with check (bucket_id = 'service-documents')`), so this
+ *  works for anonymous public submitters same as the old upload did. */
+export async function createServiceDocumentUploadUrl(
+  requestId: string,
+  field: ServiceDocumentField,
+  contentType: string
+): Promise<{ error: string | null; path?: string; token?: string }> {
+  const ext = DOCUMENT_EXT_BY_TYPE[contentType];
+  if (!ext) return { error: "Documents must be a PDF, JPG, or PNG file." };
+
+  const supabase = await createClient();
   const path = `${requestId}-${field}.${ext}`;
-  const { error } = await supabase.storage
-    .from("service-documents")
-    .upload(path, buffer, { contentType: file.type });
+  const { data, error } = await supabase.storage.from("service-documents").createSignedUploadUrl(path);
   if (error) return { error: error.message };
 
-  return { error: null, path };
+  return { error: null, path, token: data.token };
 }
 
 export async function submitServiceRequest(formData: FormData): Promise<ServiceSubmitResult> {
@@ -101,12 +121,16 @@ export async function submitServiceRequest(formData: FormData): Promise<ServiceS
   const email = String(formData.get("email") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim();
+  const requestId = String(formData.get("request_id") ?? "").trim();
 
   if (!["letter_of_residency", "character_reference"].includes(serviceType)) {
     return { error: "Please choose which service you need." };
   }
   if (!requesterName || !email || !phone) {
     return { error: "Please fill in your name, email, and phone." };
+  }
+  if (!requestId) {
+    return { error: "Something went wrong preparing your request — please reload and try again." };
   }
 
   // The fee is decided here, from the database — the browser posts a
@@ -121,29 +145,20 @@ export async function submitServiceRequest(formData: FormData): Promise<ServiceS
   const isMember = memberNo !== null;
   const feeCents = serviceFeeCents(isMember);
 
-  const requiredFiles: { formKey: string; key: string; label: string }[] = [
-    { formKey: "passport", key: "passport", label: "A passport scan" },
-    { formKey: "visa", key: "visa", label: "A visa scan" },
-    { formKey: "photo_id", key: "photo_id", label: "Proof of ID (driving licence or photo ID)" },
-    { formKey: "proof_of_residency", key: "proof_of_residency", label: "Proof of residency" },
+  const requiredFiles: { field: ServiceDocumentField; label: string }[] = [
+    { field: "passport", label: "A passport scan" },
+    { field: "visa", label: "A visa scan" },
+    { field: "photo_id", label: "Proof of ID (driving licence or photo ID)" },
+    { field: "proof_of_residency", label: "Proof of residency" },
   ];
-  for (const { formKey, label } of requiredFiles) {
-    const file = formData.get(formKey);
-    if (!(file instanceof File) || file.size === 0) {
-      return { error: `${label} is required for this request.` };
-    }
+  const paths: Record<string, string> = {};
+  for (const { field, label } of requiredFiles) {
+    const path = String(formData.get(`${field}_path`) ?? "").trim();
+    if (!path) return { error: `${label} is required for this request.` };
+    paths[field] = path;
   }
 
   const supabase = await createClient();
-  const requestId = crypto.randomUUID();
-
-  const paths: Record<string, string> = {};
-  for (const { formKey, key } of requiredFiles) {
-    const file = formData.get(formKey) as File;
-    const result = await uploadServiceDocument(supabase, file, requestId, key);
-    if (result.error) return { error: result.error };
-    paths[key] = result.path ?? "";
-  }
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:4321";
   const session = await stripe.checkout.sessions.create({

@@ -159,8 +159,10 @@ export default function JoinForm() {
                 </button>
               </div>
 
-              <label className="f">Email</label>
-              <input name="adult_email" type="email" required placeholder="name@email.com" />
+              <label className="f">
+                Email <span style={{ fontWeight: 400, color: "var(--ink-soft)" }}>(optional)</span>
+              </label>
+              <input name="adult_email" type="email" placeholder="name@email.com" />
 
               <label className="f">Name</label>
               <input

@@ -11,6 +11,11 @@ export type Story = {
   imageWidth?: number;
   imageHeight?: number;
   video?: string | null; // Public Storage URL to video, optional
+  /** Extra gallery images beyond the cover (`image` above) — only set for
+   *  admin-added stories with more than one photo. Static WordPress-migrated
+   *  stories below never set this; the detail page falls back to the single
+   *  cover image when it's absent. */
+  images?: { path: string; width?: number; height?: number }[];
   excerpt: string;
   body: string[];
 };

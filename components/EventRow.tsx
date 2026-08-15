@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { chip, type ABACEvent } from "@/content/events";
+import RsvpForm from "@/components/RsvpForm";
 
 export default function EventRow({
   event,
@@ -24,10 +26,12 @@ export default function EventRow({
       </div>
       {event.access === "members" ? (
         <span className="badge members">Members only</span>
-      ) : detail && event.cta ? (
-        <button className="btn btn-primary btn-sm" disabled title="Available once memberships go live">
-          {event.cta === "volunteer" ? "Volunteer" : "RSVP"}
-        </button>
+      ) : detail && event.cta === "rsvp" ? (
+        <RsvpForm event={event} />
+      ) : detail && event.cta === "volunteer" ? (
+        <Link href="/volunteers" className="btn btn-primary btn-sm">
+          Volunteer
+        </Link>
       ) : (
         <span className="badge open">RSVP open</span>
       )}

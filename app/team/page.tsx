@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import type { CSSProperties } from "react";
 import Image from "next/image";
-import { ADVISORY_BOARD, EXECUTIVE, FORMER_PRESIDENTS } from "@/content/team";
+import { ADVISORY_BOARD, EXECUTIVE, FORMER_PRESIDENTS, type FormerPresident } from "@/content/team";
 import { FOUNDERS } from "@/content/founders";
 import FormerPresidents from "@/components/FormerPresidents";
 import { getTeamMembersByCategory, CATEGORY_LABELS } from "@/lib/get-team-members";
@@ -105,6 +105,30 @@ function teamMemberToPersonCard(member: TeamMemberRow): TeamPerson {
   };
 }
 
+const slugify = (s: string) =>
+  s
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+
+/** DB rows have no `founder`/`tenure` fields (they store `is_founder` and
+ *  separate `term_start`/`term_end` dates) — this reconstructs the exact
+ *  "YYYY-YYYY" string FormerPresidents.tsx expects for display. `slug` is
+ *  only ever used as a React key there, never for routing, so deriving it
+ *  from the name is safe. */
+function teamMemberToFormerPresident(member: TeamMemberRow): FormerPresident {
+  const startYear = member.term_start ? new Date(member.term_start).getUTCFullYear() : undefined;
+  const endYear = member.term_end ? new Date(member.term_end).getUTCFullYear() : undefined;
+  return {
+    slug: slugify(member.name),
+    name: member.name,
+    tenure: startYear && endYear ? `${startYear}-${endYear}` : "",
+    founder: member.is_founder,
+    image: member.photo_path,
+  };
+}
+
 export default async function TeamPage() {
   const teamByCategory = await getTeamMembersByCategory();
 
@@ -129,10 +153,10 @@ export default async function TeamPage() {
     ? teamByCategory.founders.map(teamMemberToPersonCard)
     : FOUNDERS.map((f) => ({ name: f.name, role: "Founder", image: f.image }));
 
-  // Former presidents use static content (they include historical tenure/founder data
-  // that's not stored in the live database). Database team_members can still be added
-  // via admin, but are not displayed in the former presidents section by design.
-  const formerPresidents = FORMER_PRESIDENTS;
+  // Get former presidents from database, fallback to static content
+  const formerPresidents = teamByCategory.former_presidents.length > 0
+    ? teamByCategory.former_presidents.map(teamMemberToFormerPresident)
+    : FORMER_PRESIDENTS;
 
   return (
     <main>

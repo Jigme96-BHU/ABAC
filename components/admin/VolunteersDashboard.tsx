@@ -4,9 +4,10 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { deleteVolunteer } from "@/app/admin/actions";
 import { ageFrom } from "@/lib/validation";
+import { downloadCsv, type CsvColumn } from "@/lib/csv";
 import type { VolunteerRow } from "@/lib/supabase/types";
 
-const CSV_COLUMNS: { header: string; value: (v: VolunteerRow) => string }[] = [
+const CSV_COLUMNS: CsvColumn<VolunteerRow>[] = [
   { header: "Name", value: (v) => v.name },
   { header: "Sex", value: (v) => v.sex },
   { header: "Date of birth", value: (v) => v.date_of_birth },
@@ -19,22 +20,8 @@ const CSV_COLUMNS: { header: string; value: (v: VolunteerRow) => string }[] = [
   { header: "Registered", value: (v) => v.created_at },
 ];
 
-function csvCell(value: string): string {
-  return `"${value.replace(/"/g, '""')}"`;
-}
-
 function exportCsv(volunteers: VolunteerRow[]) {
-  const rows = [
-    CSV_COLUMNS.map((c) => csvCell(c.header)).join(","),
-    ...volunteers.map((v) => CSV_COLUMNS.map((c) => csvCell(c.value(v))).join(",")),
-  ];
-  const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `abac-volunteers-${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadCsv(volunteers, CSV_COLUMNS, "abac-volunteers");
 }
 
 export default function VolunteersDashboard({ volunteers }: { volunteers: VolunteerRow[] }) {
