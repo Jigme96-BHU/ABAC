@@ -1,9 +1,14 @@
 "use client";
 
 import Image from "next/image";
-import { useState, useTransition, type FormEvent } from "react";
-import { createStory, updateStory } from "@/app/admin/actions";
+import { useEffect, useState, useTransition, type FormEvent } from "react";
+import { createStory, updateStory, createStoryVideoUploadUrl, getStoryImages, deleteStoryImage } from "@/app/admin/actions";
+import { createClient } from "@/lib/supabase/client";
 import type { StoryRow } from "@/lib/supabase/types";
+
+const IMAGE_ACCEPT = "image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,image/avif";
+
+type GalleryImage = { id: string; path: string; width: number | null; height: number | null };
 
 export default function StoryForm({
   editing,
@@ -13,13 +18,66 @@ export default function StoryForm({
   onDone: () => void;
 }) {
   const [error, setError] = useState<string | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [gallery, setGallery] = useState<GalleryImage[]>([]);
+  const [galleryPending, startGalleryTransition] = useTransition();
+
+  useEffect(() => {
+    if (!editing) {
+      setGallery([]);
+      return;
+    }
+    getStoryImages(editing.id).then((result) => setGallery(result.images));
+  }, [editing]);
+
+  function handleDeleteImage(img: GalleryImage) {
+    if (!editing) return;
+    if (!confirm("Remove this photo from the story?")) return;
+    startGalleryTransition(async () => {
+      const result = await deleteStoryImage(img.id, editing.id);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      setGallery((prev) => prev.filter((g) => g.id !== img.id));
+    });
+  }
 
   function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+    setUploadStatus(null);
     const formData = new FormData(e.currentTarget);
+
     startTransition(async () => {
+      // Video goes straight to Storage from the browser — the same reason
+      // as the Services form's direct upload — before the video's own
+      // bytes ever exist. Photos stay on the existing synchronous path.
+      const video = formData.get("video");
+      if (video instanceof File && video.size > 0) {
+        setUploadStatus("Uploading video…");
+        const uploadUrl = await createStoryVideoUploadUrl(video.type);
+        if (uploadUrl.error || !uploadUrl.path || !uploadUrl.token) {
+          setError(uploadUrl.error ?? "Couldn't prepare the video for upload.");
+          setUploadStatus(null);
+          return;
+        }
+        const browserSupabase = createClient();
+        const { error: putError } = await browserSupabase.storage
+          .from("story-videos")
+          .uploadToSignedUrl(uploadUrl.path, uploadUrl.token, video);
+        if (putError) {
+          setError(`Couldn't upload the video: ${putError.message}`);
+          setUploadStatus(null);
+          return;
+        }
+        formData.set("video_path", uploadUrl.path);
+        formData.set("video_size", String(video.size));
+      }
+      formData.delete("video");
+      setUploadStatus(null);
+
       const result = editing
         ? await updateStory(editing.id, editing.slug, formData)
         : await createStory(formData);
@@ -67,20 +125,40 @@ export default function StoryForm({
         placeholder="Separate paragraphs with a blank line."
       />
 
-      <label className="f" htmlFor="st-image">
-        Photo {editing?.image_path && <span style={{ fontWeight: 400, color: "var(--ink-soft)" }}>(choose a file to replace the current one)</span>}
+      <label className="f" htmlFor="st-images">
+        Photos {editing && gallery.length > 0 && <span style={{ fontWeight: 400, color: "var(--ink-soft)" }}>(new files are added to the gallery below — the first photo overall is the cover)</span>}
       </label>
-      {editing?.image_path && (
-        <Image
-          src={editing.image_path}
-          alt=""
-          width={160}
-          height={Math.round((160 * (editing.image_height ?? 1)) / (editing.image_width ?? 1))}
-          style={{ borderRadius: 8, marginBottom: 8, display: "block" }}
-          unoptimized
-        />
+      {editing && gallery.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+          {gallery.map((img, i) => (
+            <div key={img.id} style={{ position: "relative" }}>
+              <Image
+                src={img.path}
+                alt=""
+                width={90}
+                height={Math.round((90 * (img.height ?? 1)) / (img.width ?? 1)) || 90}
+                style={{ borderRadius: 6, display: "block", objectFit: "cover" }}
+                unoptimized
+              />
+              {i === 0 && (
+                <span style={{ position: "absolute", top: 2, left: 2, fontSize: 10, background: "var(--navy)", color: "#fff", padding: "1px 5px", borderRadius: 4 }}>
+                  Cover
+                </span>
+              )}
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                style={{ position: "absolute", bottom: -2, right: -2, padding: "1px 6px", fontSize: 11, background: "#fff" }}
+                onClick={() => handleDeleteImage(img)}
+                disabled={galleryPending}
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
       )}
-      <input id="st-image" name="image" type="file" accept="image/jpeg,image/png,image/webp" />
+      <input id="st-images" name="images" type="file" accept={IMAGE_ACCEPT} multiple />
 
       <label className="f" htmlFor="st-video">
         Video {editing?.video_path && <span style={{ fontWeight: 400, color: "var(--ink-soft)" }}>(choose a file to replace the current one)</span>}
@@ -112,7 +190,7 @@ export default function StoryForm({
 
       <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
         <button className="btn btn-primary" disabled={pending}>
-          {pending ? "Saving…" : editing ? "Save changes" : "Add story"}
+          {uploadStatus ?? (pending ? "Saving…" : editing ? "Save changes" : "Add story")}
         </button>
         <button type="button" className="btn btn-ghost" onClick={onDone} disabled={pending}>
           Cancel

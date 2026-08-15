@@ -164,7 +164,13 @@ async function sendServiceRequestReceivedEmail(activation: ServiceActivationRow)
  *  row, so this sends exactly one email, same as before this feature. */
 async function sendMembershipEmails(activated: ActivationRow[]) {
   const adults = activated.filter((r) => !r.is_dependent);
-  const dependents = activated.filter((r) => r.is_dependent).map((r) => r.name ?? "").filter(Boolean);
+  const dependents = activated
+    .filter((r) => r.is_dependent)
+    .map((r) => ({
+      name: r.name ?? "",
+      memberNo: r.member_no != null && r.member_year != null ? formatMemberNo(r.member_no, r.member_year) : "",
+    }))
+    .filter((d) => d.name);
 
   for (const adult of adults) {
     const otherAdults = adults
@@ -182,7 +188,7 @@ async function sendMembershipEmails(activated: ActivationRow[]) {
 async function sendOneEmail(
   person: ActivationRow,
   otherAdults: { name: string; memberNo: string }[],
-  dependents: string[]
+  dependents: { name: string; memberNo: string }[]
 ) {
   try {
     if (!person.email || !person.name || person.member_no == null || person.member_year == null) return;

@@ -163,7 +163,18 @@ export async function submitMembership(formData: FormData): Promise<SubmitResult
 /** Every adult in the household posts under the same repeated field names
  *  (adult_email, adult_name, …) in DOM order, so the number of adults is
  *  unbounded — same shape as the child rows. Index 0 is the adult who filled
- *  in the top of the form; their phone/suburb are applied by the caller. */
+ *  in the top of the form; their phone/suburb are applied by the caller.
+ *
+ *  Only the first adult's email is required (they're the primary contact
+ *  for the household — Stripe checkout, receipts, and the "check my
+ *  status" lookup all key off it). Every adult after that has an optional
+ *  email: a grandparent or other guardian on the membership often doesn't
+ *  have — or doesn't want to give — their own address. `members.email` is
+ *  `not null` in the database (same as every other member), so a blank
+ *  email defaults to the first adult's — same fallback already used for
+ *  dependent children below. That means a 2nd+ adult without their own
+ *  email shares the household's inbox rather than getting silently
+ *  dropped from the Register of Members. */
 function parseAdults(formData: FormData): { value: FamilyMemberInput[] } | { error: string } {
   const emails = formData.getAll("adult_email").map((v) => String(v).trim());
   const names = formData.getAll("adult_name").map((v) => String(v).trim());
@@ -173,17 +184,22 @@ function parseAdults(formData: FormData): { value: FamilyMemberInput[] } | { err
 
   const rows = Math.max(emails.length, names.length, dobs.length, cids.length);
   const adults: FamilyMemberInput[] = [];
+  let primaryEmail = "";
 
   for (let i = 0; i < rows; i++) {
     const email = emails[i] ?? "";
     const name = names[i] ?? "";
     const dob = dobs[i] ?? "";
     const cid = cids[i] ?? "";
-    if (!email && !name && !dob && !cid) continue; // blank row left behind after removing one
+    const isBlankRow = i === 0 ? !email && !name && !dob && !cid : !name && !dob && !cid;
+    if (isBlankRow) continue; // blank row left behind after removing one
 
     const label = i === 0 ? "the first adult" : `adult ${i + 1}`;
-    if (!email || !name || !dob || !cid) {
-      return { error: `Please fill in email, name, date of birth, and CID for ${label}.` };
+    if (i === 0 && !email) {
+      return { error: "Please fill in email, name, date of birth, and CID for the first adult." };
+    }
+    if (!name || !dob || !cid) {
+      return { error: `Please fill in name, date of birth, and CID for ${label}.` };
     }
     if (!isValidCid(cid)) {
       return { error: `CID must be exactly 11 digits for ${label}.` };
@@ -196,9 +212,11 @@ function parseAdults(formData: FormData): { value: FamilyMemberInput[] } | { err
       };
     }
 
+    if (i === 0) primaryEmail = email;
+
     adults.push({
       member_id: crypto.randomUUID(),
-      email,
+      email: email || primaryEmail,
       name,
       gender: genders[i] || null,
       dob,
@@ -594,6 +612,12 @@ export async function checkMembershipStatus(formData: FormData): Promise<StatusR
 
 export type CorporateSubmitResult = { ok: boolean; error?: string };
 
+const CERTIFICATE_EXT_BY_TYPE: Record<string, string> = {
+  "application/pdf": "pdf",
+  "image/jpeg": "jpg",
+  "image/png": "png",
+};
+
 export async function submitCorporateApplication(formData: FormData): Promise<CorporateSubmitResult> {
   const businessName = String(formData.get("business_name") ?? "").trim();
   const abn = String(formData.get("abn") ?? "").trim();
@@ -614,6 +638,24 @@ export async function submitCorporateApplication(formData: FormData): Promise<Co
   }
 
   const supabase = await createClient();
+
+  // Business Certificate is optional — not every applicant has one on hand
+  // when they apply, and the committee can always follow up.
+  let certificatePath: string | null = null;
+  const certificate = formData.get("business_certificate");
+  if (certificate instanceof File && certificate.size > 0) {
+    const ext = CERTIFICATE_EXT_BY_TYPE[certificate.type];
+    if (!ext) return { ok: false, error: "Business Certificate must be a PDF, JPG, or PNG file." };
+
+    const id = crypto.randomUUID();
+    const buffer = Buffer.from(await certificate.arrayBuffer());
+    const { error: uploadError } = await supabase.storage
+      .from("corporate-documents")
+      .upload(`${id}-certificate.${ext}`, buffer, { contentType: certificate.type });
+    if (uploadError) return { ok: false, error: uploadError.message };
+    certificatePath = `${id}-certificate.${ext}`;
+  }
+
   const { error } = await supabase.from("corporate_members").insert({
     business_name: businessName,
     abn: abn || null,
@@ -625,6 +667,7 @@ export async function submitCorporateApplication(formData: FormData): Promise<Co
     address: address || null,
     notes: notes || null,
     tier,
+    business_certificate_path: certificatePath,
   });
   if (error) return { ok: false, error: error.message };
 

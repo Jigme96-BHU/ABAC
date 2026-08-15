@@ -30,8 +30,10 @@ export function welcomeEmail({
    *  of this email, so this just lists who else is covered. */
   household?: { name: string; memberNo: string }[];
   /** Dependent children (under 18) covered by the same Family Membership —
-   *  they never get their own copy of this email. */
-  dependents?: string[];
+   *  they never get their own copy of this email, but each has their own
+   *  membership number (assigned the same way as any other member), so it's
+   *  surfaced here rather than just their name. */
+  dependents?: { name: string; memberNo: string }[];
 }) {
   const isRenewal = kind === "renewal";
   const isSwitch = kind === "switch";
@@ -42,17 +44,17 @@ export function welcomeEmail({
     ? `ABAC membership changed to ${isFamily ? "Family" : "Single"}`
     : isRenewal
       ? `ABAC ${membershipNoun} renewed`
-      : `Welcome to ABAC — your ${membershipNoun} is active`;
+      : `Your ABAC ${membershipNoun} is confirmed`;
   const introText = isSwitch
     ? `Your ABAC membership has been changed to ${isFamily ? "Family" : "Single"} and is active. Your renewal date is unchanged.`
     : isRenewal
-      ? `Your ABAC ${membershipNoun} has been renewed and is active.`
-      : `Kuzu zangpo la, and welcome to the ABAC family! Your ${membershipNoun} is confirmed and active.`;
+      ? `Your ABAC ${membershipNoun} has been renewed and is now active.`
+      : `We are pleased to confirm that your ABAC ${membershipNoun} is now active.`;
   const introHtml = isSwitch
     ? `Your ABAC membership has been changed to <strong>${isFamily ? "Family" : "Single"}</strong> and is active. Your renewal date is unchanged.`
     : isRenewal
-      ? `Your ABAC ${membershipNoun} has been renewed and is active.`
-      : `<strong>Kuzu zangpo la, and welcome to the ABAC family!</strong> Your ${membershipNoun} is confirmed and active.`;
+      ? `Your ABAC ${membershipNoun} has been renewed and is now active.`
+      : `We are pleased to confirm that your ABAC ${membershipNoun} is now active.`;
 
   const householdLines =
     household && household.length > 0
@@ -60,7 +62,7 @@ export function welcomeEmail({
       : "";
   const dependentLines =
     dependents && dependents.length > 0
-      ? `\nDependents covered (under 18, no fee): ${dependents.join(", ")}.`
+      ? `\nDependents covered (under 18, no fee): ${dependents.map((d) => `${d.name} (${d.memberNo})`).join(", ")}.`
       : "";
 
   const text = `Dear ${name},
@@ -72,9 +74,9 @@ Membership fee: ${fee}
 Valid until: ${validUntil}
 ${householdLines}${dependentLines}
 
-Please keep this email as your membership confirmation and receipt. You can look up your
-status anytime at https://bhutaneseincanberra.org.au/join using the email and date of birth
-you registered with.
+Please retain this email as your membership confirmation and receipt. Your status can be
+checked at any time at https://bhutaneseincanberra.org.au/join using the email address and
+date of birth provided at registration.
 
 Tashi Delek,
 ABAC Committee
@@ -106,15 +108,15 @@ bhutancanberra@gmail.com`;
     ${
       dependents && dependents.length > 0
         ? `<p style="margin:8px 0 0;color:${COLOR.ink};font-size:13.5px;line-height:1.7">
-            <strong>Dependents covered</strong> (under 18, no fee): ${dependents.map(escapeHtml).join(", ")}.
+            <strong>Dependents covered</strong> (under 18, no fee): ${dependents.map((d) => `${escapeHtml(d.name)} (${escapeHtml(d.memberNo)})`).join(", ")}.
           </p>`
         : ""
     }
     <p style="margin:20px 0;color:${COLOR.inkSoft};font-size:13.5px;line-height:1.7">
-      Please keep this email as your membership confirmation and receipt. You can
-      look up your status anytime on the
+      Please retain this email as your membership confirmation and receipt. Your status can be
+      checked at any time on the
       <a href="https://bhutaneseincanberra.org.au/join" style="color:${COLOR.navy}">Join page</a>,
-      using the email and date of birth you registered with.
+      using the email address and date of birth provided at registration.
     </p>
     <p style="margin:0;color:${COLOR.ink};font-size:14px">
       Tashi Delek,<br />

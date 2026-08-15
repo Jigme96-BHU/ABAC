@@ -7,8 +7,16 @@ import {
   rejectCorporateMember,
   uploadCorporateLogo,
   removeCorporateLogo,
+  searchCorporateMembers,
+  createCorporateMemberManually,
+  deleteCorporateMember,
+  getCorporateMembersForExport,
+  getSignedDocumentUrl,
+  hideCorporatePartner,
+  type CorporateExportFilter,
 } from "@/app/admin/actions";
-import { corporateTierLabel } from "@/lib/corporate-tiers";
+import { downloadCsv, type CsvColumn } from "@/lib/csv";
+import { CORPORATE_TIERS, corporateTierLabel, type CorporateTier } from "@/lib/corporate-tiers";
 import type { CorporateMemberRow } from "@/lib/supabase/types";
 
 const STATUS_LABEL: Record<CorporateMemberRow["status"], string> = {
@@ -18,9 +26,57 @@ const STATUS_LABEL: Record<CorporateMemberRow["status"], string> = {
   rejected: "Rejected",
 };
 
+const EXPORT_COLUMNS: CsvColumn<CorporateMemberRow>[] = [
+  { header: "Business name", value: (m) => m.business_name },
+  { header: "ABN", value: (m) => m.abn ?? "" },
+  { header: "Tier", value: (m) => corporateTierLabel(m.tier) },
+  { header: "Status", value: (m) => STATUS_LABEL[m.status] },
+  { header: "Contact name", value: (m) => m.contact_name },
+  { header: "Email", value: (m) => m.email },
+  { header: "Phone", value: (m) => m.phone },
+  { header: "Website", value: (m) => m.website ?? "" },
+  { header: "Submitted", value: (m) => new Date(m.created_at).toLocaleDateString("en-AU") },
+  { header: "Joined", value: (m) => (m.joined_at ? new Date(m.joined_at).toLocaleDateString("en-AU") : "") },
+  { header: "Expires", value: (m) => (m.expires_at ? new Date(m.expires_at).toLocaleDateString("en-AU") : "") },
+];
+
 export default function CorporateDashboard({ corporateMembers }: { corporateMembers: CorporateMemberRow[] }) {
+  const [view, setView] = useState<"list" | "search" | "add" | "export">("list");
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
+        <button className={view === "list" ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"} onClick={() => setView("list")}>
+          All applications
+        </button>
+        <button className={view === "search" ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"} onClick={() => setView("search")}>
+          Search
+        </button>
+        <button className={view === "add" ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"} onClick={() => setView("add")}>
+          + Add manually
+        </button>
+        <button className={view === "export" ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"} onClick={() => setView("export")}>
+          Bulk export
+        </button>
+      </div>
+
+      {view === "list" ? (
+        <CorporateTable members={corporateMembers} />
+      ) : view === "search" ? (
+        <CorporateSearchView />
+      ) : view === "add" ? (
+        <CorporateAddForm onDone={() => setView("list")} />
+      ) : (
+        <CorporateExportView />
+      )}
+    </div>
+  );
+}
+
+function CorporateTable({ members }: { members: CorporateMemberRow[] }) {
   const [pending, startTransition] = useTransition();
   const [rowError, setRowError] = useState<Record<string, string>>({});
+  const [busyPath, setBusyPath] = useState<string | null>(null);
   const router = useRouter();
 
   function clearRowError(id: string) {
@@ -42,10 +98,20 @@ export default function CorporateDashboard({ corporateMembers }: { corporateMemb
   }
 
   function handleReject(m: CorporateMemberRow) {
-    if (!confirm(`Reject ${m.business_name}'s application?`)) return;
+    if (!confirm(`Reject ${m.business_name}'s application? They'll receive an email notifying them.`)) return;
     clearRowError(m.id);
     startTransition(async () => {
       const result = await rejectCorporateMember(m.id);
+      if (result.error) setRowError((prev) => ({ ...prev, [m.id]: result.error! }));
+      router.refresh();
+    });
+  }
+
+  function handleDelete(m: CorporateMemberRow) {
+    if (!confirm(`Delete ${m.business_name}'s record permanently? This can't be undone.`)) return;
+    clearRowError(m.id);
+    startTransition(async () => {
+      const result = await deleteCorporateMember(m.id);
       if (result.error) setRowError((prev) => ({ ...prev, [m.id]: result.error! }));
       router.refresh();
     });
@@ -71,7 +137,29 @@ export default function CorporateDashboard({ corporateMembers }: { corporateMemb
     });
   }
 
-  if (corporateMembers.length === 0) {
+  function handleToggleHidden(m: CorporateMemberRow) {
+    clearRowError(m.id);
+    startTransition(async () => {
+      const result = await hideCorporatePartner(m.id, !m.hidden_from_partners);
+      if (result.error) setRowError((prev) => ({ ...prev, [m.id]: result.error! }));
+      router.refresh();
+    });
+  }
+
+  function handleViewCertificate(path: string) {
+    setBusyPath(path);
+    startTransition(async () => {
+      const result = await getSignedDocumentUrl("corporate-documents", path);
+      setBusyPath(null);
+      if (result.error || !result.url) {
+        alert(`Couldn't open that document: ${result.error ?? "unknown error"}`);
+        return;
+      }
+      window.open(result.url, "_blank", "noopener");
+    });
+  }
+
+  if (members.length === 0) {
     return <p style={{ color: "var(--ink-soft)" }}>No corporate applications yet.</p>;
   }
 
@@ -88,12 +176,20 @@ export default function CorporateDashboard({ corporateMembers }: { corporateMemb
         </tr>
       </thead>
       <tbody>
-        {corporateMembers.map((m) => (
+        {members.map((m) => (
           <tr key={m.id}>
             <td>
               <strong>{m.business_name}</strong>
-              {m.website && (
-                <div style={{ fontSize: 12, color: "var(--ink-soft)" }}>{m.website}</div>
+              {m.website && <div style={{ fontSize: 12, color: "var(--ink-soft)" }}>{m.website}</div>}
+              {m.business_certificate_path && (
+                <button
+                  className="btn btn-ghost btn-sm"
+                  style={{ padding: "2px 8px", fontSize: 11, marginTop: 4 }}
+                  onClick={() => handleViewCertificate(m.business_certificate_path!)}
+                  disabled={pending && busyPath === m.business_certificate_path}
+                >
+                  {pending && busyPath === m.business_certificate_path ? "Opening…" : "View certificate"}
+                </button>
               )}
             </td>
             <td>{corporateTierLabel(m.tier)}</td>
@@ -105,6 +201,9 @@ export default function CorporateDashboard({ corporateMembers }: { corporateMemb
             </td>
             <td>
               {STATUS_LABEL[m.status]}
+              {m.status === "active" && m.hidden_from_partners && (
+                <div style={{ fontSize: 11, color: "var(--ink-soft)" }}>Hidden from Our Partners</div>
+              )}
               {rowError[m.id] && (
                 <div className="notice warn" style={{ marginTop: 6, fontSize: 12, padding: "6px 10px" }}>
                   {rowError[m.id]}
@@ -115,36 +214,27 @@ export default function CorporateDashboard({ corporateMembers }: { corporateMemb
             <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
               {m.status === "pending" && (
                 <>
-                  <button
-                    className="btn btn-primary btn-sm"
-                    style={{ marginRight: 6 }}
-                    onClick={() => handleApprove(m)}
-                    disabled={pending}
-                  >
+                  <button className="btn btn-primary btn-sm" style={{ marginRight: 6 }} onClick={() => handleApprove(m)} disabled={pending}>
                     Approve
                   </button>
-                  <button className="btn btn-ghost btn-sm" onClick={() => handleReject(m)} disabled={pending}>
+                  <button className="btn btn-ghost btn-sm" style={{ marginRight: 6 }} onClick={() => handleReject(m)} disabled={pending}>
                     Reject
                   </button>
                 </>
               )}
               {m.status === "active" && (
-                <div style={{ minWidth: 220 }}>
+                <div style={{ minWidth: 220, display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
                   {m.logo_path ? (
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "flex-end" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <a href={m.logo_path} target="_blank" rel="noopener" style={{ fontSize: 12 }}>
                         View logo
                       </a>
-                      <button
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => handleRemoveLogo(m.id)}
-                        disabled={pending}
-                      >
+                      <button className="btn btn-ghost btn-sm" onClick={() => handleRemoveLogo(m.id)} disabled={pending}>
                         Remove
                       </button>
                     </div>
                   ) : (
-                    <form onSubmit={(e) => handleLogoSubmit(e, m.id)} style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                    <form onSubmit={(e) => handleLogoSubmit(e, m.id)} style={{ display: "flex", gap: 6 }}>
                       <input
                         name="logo"
                         type="file"
@@ -157,12 +247,239 @@ export default function CorporateDashboard({ corporateMembers }: { corporateMemb
                       </button>
                     </form>
                   )}
+                  <button className="btn btn-ghost btn-sm" onClick={() => handleToggleHidden(m)} disabled={pending}>
+                    {m.hidden_from_partners ? "Show on Our Partners" : "Hide from Our Partners"}
+                  </button>
                 </div>
               )}
+              <button
+                className="btn btn-ghost btn-sm"
+                style={{ marginTop: 6, color: "#c33" }}
+                onClick={() => handleDelete(m)}
+                disabled={pending}
+              >
+                Delete
+              </button>
             </td>
           </tr>
         ))}
       </tbody>
     </table>
+  );
+}
+
+function CorporateSearchView() {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<CorporateMemberRow[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  function runSearch(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    startTransition(async () => {
+      const res = await searchCorporateMembers(query);
+      if (res.error) {
+        setError(res.error);
+        return;
+      }
+      setResults(res.results);
+    });
+  }
+
+  return (
+    <div>
+      <form onSubmit={runSearch} style={{ display: "flex", gap: 8, marginBottom: 20, maxWidth: 480 }}>
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Business name, contact, email, or ABN"
+          style={{ flex: 1 }}
+        />
+        <button className="btn btn-primary btn-sm" disabled={pending}>
+          Search
+        </button>
+      </form>
+      {error && (
+        <div className="notice warn" style={{ marginBottom: 16 }}>
+          {error}
+        </div>
+      )}
+      {results.length > 0 ? <CorporateTable members={results} /> : <p style={{ color: "var(--ink-soft)" }}>Search by business name, contact, email, or ABN.</p>}
+    </div>
+  );
+}
+
+function CorporateAddForm({ onDone }: { onDone: () => void }) {
+  const [tier, setTier] = useState<CorporateTier>("gold");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const router = useRouter();
+
+  function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    const formData = new FormData(e.currentTarget);
+    formData.set("tier", tier);
+    startTransition(async () => {
+      const result = await createCorporateMemberManually(formData);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      router.refresh();
+      onDone();
+    });
+  }
+
+  return (
+    <form onSubmit={submit} className="form-card" style={{ maxWidth: 520 }}>
+      <p style={{ color: "var(--ink-soft)", fontSize: 13, marginTop: 0 }}>
+        For a sponsor whose application came in outside the public form — e.g. agreed by phone or in person. This
+        still goes through the normal Approve step (a Stripe payment link is emailed) before it becomes active.
+      </p>
+
+      <label className="f" style={{ marginTop: 0 }}>Business name</label>
+      <input name="business_name" type="text" required />
+
+      <div className="two">
+        <div>
+          <label className="f">ABN (optional)</label>
+          <input name="abn" type="text" />
+        </div>
+        <div>
+          <label className="f">Website (optional)</label>
+          <input name="website" type="url" />
+        </div>
+      </div>
+
+      <label className="f">Contact name</label>
+      <input name="contact_name" type="text" required />
+
+      <div className="two">
+        <div>
+          <label className="f">Role (optional)</label>
+          <input name="contact_role" type="text" />
+        </div>
+        <div>
+          <label className="f">Phone</label>
+          <input name="phone" type="tel" required />
+        </div>
+      </div>
+
+      <label className="f">Email</label>
+      <input name="email" type="email" required />
+
+      <label className="f">Address (optional)</label>
+      <input name="address" type="text" />
+
+      <label className="f">Tier</label>
+      <select value={tier} onChange={(e) => setTier(e.target.value as CorporateTier)}>
+        {CORPORATE_TIERS.map((t) => (
+          <option key={t.value} value={t.value}>
+            {t.label}
+          </option>
+        ))}
+      </select>
+
+      <label className="f">Notes (optional)</label>
+      <textarea name="notes" rows={2} />
+
+      {error && (
+        <div className="notice warn" style={{ marginTop: 12 }}>
+          {error}
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
+        <button className="btn btn-primary" disabled={pending}>
+          {pending ? "Adding…" : "Add application"}
+        </button>
+        <button type="button" className="btn btn-ghost" onClick={onDone} disabled={pending}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function CorporateExportView() {
+  const [filter, setFilter] = useState<CorporateExportFilter>({});
+  const [pending, startTransition] = useTransition();
+  const [message, setMessage] = useState<string | null>(null);
+
+  function toggleTier(tier: CorporateTier) {
+    setFilter((f) => {
+      const current = f.tiers ?? [];
+      const tiers = current.includes(tier) ? current.filter((t) => t !== tier) : [...current, tier];
+      return { ...f, tiers: tiers.length > 0 ? tiers : undefined };
+    });
+  }
+
+  function toggleStatus(status: CorporateMemberRow["status"]) {
+    setFilter((f) => {
+      const current = f.statuses ?? [];
+      const statuses = current.includes(status) ? current.filter((s) => s !== status) : [...current, status];
+      return { ...f, statuses: statuses.length > 0 ? statuses : undefined };
+    });
+  }
+
+  function runExport() {
+    setMessage(null);
+    startTransition(async () => {
+      const res = await getCorporateMembersForExport(filter);
+      if (res.error) {
+        setMessage(`Couldn't export: ${res.error}`);
+        return;
+      }
+      if (res.rows.length === 0) {
+        setMessage("No corporate members match those filters.");
+        return;
+      }
+      downloadCsv(res.rows, EXPORT_COLUMNS, "abac-corporate-members");
+      setMessage(`Exported ${res.rows.length} corporate members.`);
+    });
+  }
+
+  return (
+    <div className="form-card" style={{ maxWidth: 480 }}>
+      <label className="f" style={{ marginTop: 0 }}>Tier</label>
+      <div style={{ marginBottom: 4 }}>
+        {CORPORATE_TIERS.map((t) => (
+          <label key={t.value} style={{ display: "block", marginBottom: 4 }}>
+            <input type="checkbox" checked={filter.tiers?.includes(t.value) ?? false} onChange={() => toggleTier(t.value)} /> {t.label}
+          </label>
+        ))}
+      </div>
+
+      <label className="f">Status</label>
+      <div style={{ marginBottom: 4 }}>
+        {(["pending", "approved", "active", "rejected"] as const).map((s) => (
+          <label key={s} style={{ display: "block", marginBottom: 4 }}>
+            <input type="checkbox" checked={filter.statuses?.includes(s) ?? false} onChange={() => toggleStatus(s)} /> {STATUS_LABEL[s]}
+          </label>
+        ))}
+      </div>
+
+      <label className="f">Submitted between</label>
+      <div className="two">
+        <input
+          type="date"
+          value={filter.dateRange?.start ?? ""}
+          onChange={(e) => setFilter((f) => ({ ...f, dateRange: { start: e.target.value, end: f.dateRange?.end ?? "" } }))}
+        />
+        <input
+          type="date"
+          value={filter.dateRange?.end ?? ""}
+          onChange={(e) => setFilter((f) => ({ ...f, dateRange: { start: f.dateRange?.start ?? "", end: e.target.value } }))}
+        />
+      </div>
+
+      <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={runExport} disabled={pending}>
+        {pending ? "Exporting…" : "Export CSV"}
+      </button>
+      {message && <p style={{ marginTop: 10, fontSize: 13, color: "var(--ink-soft)" }}>{message}</p>}
+    </div>
   );
 }

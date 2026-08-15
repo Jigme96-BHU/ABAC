@@ -145,6 +145,11 @@ export default function TeamMemberForm({
         Active — show this member on the public page
       </label>
 
+      <label className="consent">
+        <input type="checkbox" name="is_founder" defaultChecked={editing?.is_founder ?? false} />
+        Also a founder of ABAC (Former Presidents only)
+      </label>
+
       {error && (
         <div className="notice warn" style={{ marginTop: 12 }}>
           {error}

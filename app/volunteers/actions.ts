@@ -2,6 +2,8 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { ageFrom, isValidCid } from "@/lib/validation";
+import { mailer, MAIL_FROM } from "@/lib/mail";
+import { volunteerGuardianNoticeEmail } from "@/lib/emails/volunteer-guardian-notice";
 
 export type VolunteerSubmitResult = { ok: boolean; error?: string };
 
@@ -60,6 +62,22 @@ export async function submitVolunteerRegistration(formData: FormData): Promise<V
     guardian_consent: guardianConsent,
   });
   if (error) return { ok: false, error: error.message };
+
+  // Best-effort — a mail hiccup shouldn't block a valid registration. Only
+  // the guardian is notified: they never have their own inbox tied to the
+  // volunteer record, but they're the one who needs confirmation their
+  // consent went through.
+  if (isMinor && guardianEmail && guardianName) {
+    try {
+      const { subject, text, html } = volunteerGuardianNoticeEmail({
+        guardianName,
+        childName: name,
+      });
+      await mailer.sendMail({ from: MAIL_FROM, to: guardianEmail, subject, text, html });
+    } catch (err) {
+      console.error("volunteer guardian notice email failed:", err);
+    }
+  }
 
   return { ok: true };
 }

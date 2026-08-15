@@ -7,6 +7,7 @@ export default function BulkEmailForm() {
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [filter, setFilter] = useState<BulkEmailFilter>({
+    audience: "community",
     membershipTypes: ["single", "family"],
     includeInactive: false,
   });
@@ -64,7 +65,7 @@ export default function BulkEmailForm() {
       setResult({ success: `Email sent to ${res.recipientCount} members` });
       setSubject("");
       setMessage("");
-      setFilter({ membershipTypes: ["single", "family"], includeInactive: false });
+      setFilter({ audience: filter.audience, membershipTypes: ["single", "family"], includeInactive: false });
       setAttachments([]);
     }
     setLoading(false);
@@ -118,55 +119,95 @@ export default function BulkEmailForm() {
 
         <div style={{ marginBottom: 16 }}>
           <label style={{ display: "block", marginBottom: 8, fontWeight: 500 }}>
-            Membership Types
+            Audience
           </label>
-          <label style={{ display: "block", marginBottom: 6 }}>
-            <input
-              type="checkbox"
-              checked={filter.membershipTypes?.includes("single") || false}
-              onChange={() => handleToggleMembershipType("single")}
-            />
-            {" "}Single Members
-          </label>
-          <label style={{ display: "block" }}>
-            <input
-              type="checkbox"
-              checked={filter.membershipTypes?.includes("family") || false}
-              onChange={() => handleToggleMembershipType("family")}
-            />
-            {" "}Family Members
-          </label>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              type="button"
+              onClick={() => handleFilterChange("audience", "community")}
+              style={{
+                padding: "6px 14px",
+                borderRadius: 4,
+                border: filter.audience === "community" ? "1px solid #16324F" : "1px solid #ccc",
+                background: filter.audience === "community" ? "#16324F" : "#fff",
+                color: filter.audience === "community" ? "#fff" : "#333",
+                cursor: "pointer",
+                fontSize: 13,
+              }}
+            >
+              Community members
+            </button>
+            <button
+              type="button"
+              onClick={() => handleFilterChange("audience", "corporate")}
+              style={{
+                padding: "6px 14px",
+                borderRadius: 4,
+                border: filter.audience === "corporate" ? "1px solid #16324F" : "1px solid #ccc",
+                background: filter.audience === "corporate" ? "#16324F" : "#fff",
+                color: filter.audience === "corporate" ? "#fff" : "#333",
+                cursor: "pointer",
+                fontSize: 13,
+              }}
+            >
+              Corporate members
+            </button>
+          </div>
         </div>
 
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ display: "block", marginBottom: 8, fontWeight: 500 }}>
-            Corporate Tiers
-          </label>
-          <label style={{ display: "block", marginBottom: 6 }}>
-            <input
-              type="checkbox"
-              checked={filter.corporateTiers?.includes("gold") || false}
-              onChange={() => handleToggleCorporateTier("gold")}
-            />
-            {" "}Gold
-          </label>
-          <label style={{ display: "block", marginBottom: 6 }}>
-            <input
-              type="checkbox"
-              checked={filter.corporateTiers?.includes("platinum") || false}
-              onChange={() => handleToggleCorporateTier("platinum")}
-            />
-            {" "}Platinum
-          </label>
-          <label style={{ display: "block" }}>
-            <input
-              type="checkbox"
-              checked={filter.corporateTiers?.includes("diamond") || false}
-              onChange={() => handleToggleCorporateTier("diamond")}
-            />
-            {" "}Diamond
-          </label>
-        </div>
+        {filter.audience === "community" ? (
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: "block", marginBottom: 8, fontWeight: 500 }}>
+              Membership Types
+            </label>
+            <label style={{ display: "block", marginBottom: 6 }}>
+              <input
+                type="checkbox"
+                checked={filter.membershipTypes?.includes("single") || false}
+                onChange={() => handleToggleMembershipType("single")}
+              />
+              {" "}Single Members
+            </label>
+            <label style={{ display: "block" }}>
+              <input
+                type="checkbox"
+                checked={filter.membershipTypes?.includes("family") || false}
+                onChange={() => handleToggleMembershipType("family")}
+              />
+              {" "}Family Members
+            </label>
+          </div>
+        ) : (
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: "block", marginBottom: 8, fontWeight: 500 }}>
+              Corporate Tiers
+            </label>
+            <label style={{ display: "block", marginBottom: 6 }}>
+              <input
+                type="checkbox"
+                checked={filter.corporateTiers?.includes("gold") || false}
+                onChange={() => handleToggleCorporateTier("gold")}
+              />
+              {" "}Gold
+            </label>
+            <label style={{ display: "block", marginBottom: 6 }}>
+              <input
+                type="checkbox"
+                checked={filter.corporateTiers?.includes("platinum") || false}
+                onChange={() => handleToggleCorporateTier("platinum")}
+              />
+              {" "}Platinum
+            </label>
+            <label style={{ display: "block" }}>
+              <input
+                type="checkbox"
+                checked={filter.corporateTiers?.includes("diamond") || false}
+                onChange={() => handleToggleCorporateTier("diamond")}
+              />
+              {" "}Diamond
+            </label>
+          </div>
+        )}
 
         <div style={{ marginBottom: 16 }}>
           <label style={{ display: "block", marginBottom: 8, fontWeight: 500 }}>

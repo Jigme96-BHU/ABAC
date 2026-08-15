@@ -5,6 +5,7 @@ import AdminDashboard from "./AdminDashboard";
 import StoriesDashboard from "./StoriesDashboard";
 import DocumentsDashboard from "./DocumentsDashboard";
 import VolunteersDashboard from "./VolunteersDashboard";
+import MembersDashboard from "./MembersDashboard";
 import CorporateDashboard from "./CorporateDashboard";
 import ServiceRequestsDashboard from "./ServiceRequestsDashboard";
 import BulkEmailForm from "./BulkEmailForm";
@@ -20,7 +21,7 @@ import type {
   TeamMemberRow,
 } from "@/lib/supabase/types";
 
-type Tab = "events" | "stories" | "documents" | "volunteers" | "corporate" | "services" | "email" | "team";
+type Tab = "events" | "stories" | "documents" | "volunteers" | "members" | "corporate" | "services" | "email" | "team";
 
 export default function AdminTabs({
   events,
@@ -70,6 +71,12 @@ export default function AdminTabs({
           Volunteers ({volunteers.length})
         </button>
         <button
+          className={tab === "members" ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"}
+          onClick={() => setTab("members")}
+        >
+          Members
+        </button>
+        <button
           className={tab === "corporate" ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"}
           onClick={() => setTab("corporate")}
         >
@@ -103,6 +110,8 @@ export default function AdminTabs({
         <DocumentsDashboard documents={documents} />
       ) : tab === "volunteers" ? (
         <VolunteersDashboard volunteers={volunteers} />
+      ) : tab === "members" ? (
+        <MembersDashboard />
       ) : tab === "corporate" ? (
         <CorporateDashboard corporateMembers={corporateMembers} />
       ) : tab === "services" ? (

@@ -196,9 +196,9 @@ The site must not replace the live WordPress one until all of these are done.
       existing renewal date and prorates the difference in annual fees for the
       remaining days — a Single member switching to Family with 275 days left at
       a $10 difference pays $7.53. Switching keeps the household on one renewal
-      date and prevents fee-drift as members change categories. Accessed via a
-      new UI in the Member Dashboard component (not yet exposed in the site, pending
-      full Member Portal build — it exists in the codebase as stub functionality).
+      date and prevents fee-drift as members change categories. Live on `/join`
+      behind an "Already a member? Switch category" disclosure
+      (`components/SwitchCategoryForm.tsx`).
 - [ ] **Run the service member pricing migration** (`0019_service_member_pricing.sql`,
       requires `0013` and `0004`). Adds **two-tier pricing for service requests**:
       ABAC members pay **$10**, non-members pay **$45** for Letter of Residency
@@ -209,6 +209,50 @@ The site must not replace the live WordPress one until all of these are done.
       confirmation email after the webhook confirms payment. Updates the `/services`
       form to explain the pricing difference and show the applicant's determined
       rate before they hit Stripe.
+- [ ] **Run the admin search & upload limits migration**
+      (`0020_admin_search_and_upload_limits.sql`, requires `0003`, `0012`, `0013`).
+      Adds case-insensitive search indexes backing the new admin **Members** tab
+      and the Corporate search box, and sets a real 3MB server-side cap on the
+      `service-documents` Storage bucket (a backstop behind the client-side
+      check in the new direct-to-storage upload flow, not just something the
+      browser promises to respect).
+- [ ] **Run the event RSVPs migration** (`0021_event_rsvps.sql`, requires `0001`).
+      Replaces the RSVP button on `/events` — permanently disabled since before
+      payments went live — with a real form (name, email, phone). One RSVP per
+      email per event; a repeat attempt gets a friendly "you've already RSVPed"
+      message instead of a duplicate row. Confirmation email sent immediately
+      (RSVPs aren't gated on payment). Admins view RSVPs per event from a
+      "View RSVPs" button in the existing Events tab — no new admin tab. The
+      "Volunteer" call-to-action on events (the same dead-button bug) now links
+      to `/volunteers` instead.
+- [ ] **Run the corporate business certificate migration**
+      (`0022_corporate_business_certificate.sql`, requires `0012`). Adds an
+      optional **Business Certificate** upload to the Corporate Membership
+      application form, stored in a new private `corporate-documents` bucket
+      (viewed by admins via a short-lived signed URL, same pattern as service
+      documents — a business certificate can carry a registration number, so
+      it isn't in the public `corporate-logos` bucket). Also adds a
+      `hidden_from_partners` toggle so admins can hide an active partner from
+      the public `/partners` page without touching its `status` (which the
+      approval/payment state machine depends on) — a "Hide from Our Partners"
+      button per active row in the admin Corporate tab.
+- [ ] **Run the team members seed migration** (`0023_team_members_seed.sql`,
+      requires `0016`). Fixes a real bug: `/team` merged the database with
+      static content by falling back to static *only when a category was
+      empty*, so adding a single admin executive member silently erased the
+      other eight from view. This seeds every current Executive/Advisory/
+      Founder/Former President into `team_members`, making the database the
+      real source of truth — admins can now add or remove members without
+      affecting anyone else, and Former Presidents (previously hardcoded to
+      ignore the database entirely) now reads from it too. No layout changes.
+- [ ] **Run the story images migration** (`0024_story_images.sql`, requires
+      `0002`). Adds a **photo gallery** to Stories — the admin Stories tab now
+      accepts multiple photos per story (first photo is the cover shown on
+      cards), each removable individually. Also broadens accepted image
+      formats beyond JPEG/PNG/WebP to GIF, HEIC/HEIF (iPhone photos), and AVIF
+      — dimensions aren't read for HEIC/HEIF/AVIF (no parser for those
+      container formats), so those degrade to a placeholder tile rather than
+      breaking, a known/documented gap.
 - [ ] **Set up the daily expiry-reminder cron job.** Add a production
       `CRON_SECRET`. `vercel.json` already schedules a daily production call
       to `/api/members/expiry-reminders`; Vercel sends

@@ -25,6 +25,11 @@ export function imageSizeFromBuffer(buf: Buffer): Size | null {
     return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
   }
 
+  // GIF (87a/89a): fixed-offset logical screen descriptor at bytes 6..10.
+  if (buf.length > 10 && buf.toString("ascii", 0, 3) === "GIF") {
+    return { width: buf.readUInt16LE(6), height: buf.readUInt16LE(8) };
+  }
+
   // WebP (VP8X / VP8L / VP8 )
   if (buf.length > 30 && buf.toString("ascii", 0, 4) === "RIFF" && buf.toString("ascii", 8, 12) === "WEBP") {
     const chunk = buf.toString("ascii", 12, 16);

@@ -15,6 +15,16 @@ export type EventRow = {
   updated_at: string;
 };
 
+/** Shape of a row from the `event_rsvps` table (supabase/migrations/0021_event_rsvps.sql). */
+export type EventRsvpRow = {
+  id: string;
+  event_id: string;
+  name: string;
+  email: string;
+  phone: string;
+  created_at: string;
+};
+
 /** Shape of a row from the `stories` table (supabase/migrations/0002_stories.sql, extended by 0015_story_videos.sql). */
 export type StoryRow = {
   id: string;
@@ -32,6 +42,19 @@ export type StoryRow = {
   published: boolean;
   created_at: string;
   updated_at: string;
+};
+
+/** Shape of a row from the `story_images` table (supabase/migrations/0024_story_images.sql).
+ *  Row with the lowest display_order for a story is its "cover" — mirrored
+ *  onto stories.image_path/image_width/image_height for backward compatibility. */
+export type StoryImageRow = {
+  id: string;
+  story_id: string;
+  path: string; // public Storage URL, same bucket as stories.image_path
+  width: number | null;
+  height: number | null;
+  display_order: number;
+  created_at: string;
 };
 
 /** Shape of a row from the `members` table (supabase/migrations/0003_members.sql,
@@ -93,6 +116,8 @@ export type CorporateMemberRow = {
   stripe_checkout_session_id: string | null;
   fee_cents: number | null;
   logo_path: string | null; // admin-managed public Storage URL
+  business_certificate_path: string | null; // private Storage path — view via a signed URL (0022_corporate_business_certificate.sql)
+  hidden_from_partners: boolean; // display-only toggle, independent of status (0022_corporate_business_certificate.sql)
   joined_at: string | null;
   expires_at: string | null;
   created_at: string;
@@ -150,6 +175,7 @@ export type TeamMemberRow = {
   active: boolean;
   term_start: string | null; // yyyy-mm-dd
   term_end: string | null; // yyyy-mm-dd
+  is_founder: boolean; // former_presidents only — whether they also founded ABAC (0023_team_members_seed.sql)
   created_at: string;
   updated_at: string;
 };

@@ -1,7 +1,17 @@
 "use client";
 
 import { useState, useTransition, type FormEvent } from "react";
-import { submitServiceRequest, lookupMemberForService, type MemberLookup } from "@/app/services/actions";
+import {
+  submitServiceRequest,
+  lookupMemberForService,
+  beginServiceRequest,
+  createServiceDocumentUploadUrl,
+  SERVICE_DOCUMENT_FIELDS,
+  SERVICE_DOCUMENT_MAX_BYTES,
+  type MemberLookup,
+  type ServiceDocumentField,
+} from "@/app/services/actions";
+import { createClient } from "@/lib/supabase/client";
 import {
   SERVICE_TYPES,
   SERVICE_FEE_MEMBER_CENTS,
@@ -13,12 +23,20 @@ import { formatMemberNo } from "@/lib/member-number";
 
 const FILE_ACCEPT = ".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png";
 
+const FIELD_LABEL: Record<ServiceDocumentField, string> = {
+  passport: "Passport",
+  visa: "Visa",
+  photo_id: "Proof of ID",
+  proof_of_residency: "Proof of Residency",
+};
+
 type Member = Extract<MemberLookup, { ok: true }>;
 
 export default function ServiceRequestForm() {
   const [revealed, setRevealed] = useState(false);
   const [serviceType, setServiceType] = useState<ServiceType>("letter_of_residency");
   const [error, setError] = useState<string | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const [notAMember, setNotAMember] = useState(false);
@@ -53,9 +71,61 @@ export default function ServiceRequestForm() {
 
   function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const formData = new FormData(form);
     setError(null);
+    setUploadStatus(null);
+
+    // Every file is checked against the 3MB cap up front, before any upload
+    // starts — a clear, immediate error beats a failed upload partway
+    // through four sequential file transfers.
+    const oversized: string[] = [];
+    for (const field of SERVICE_DOCUMENT_FIELDS) {
+      const file = formData.get(field);
+      if (file instanceof File && file.size > SERVICE_DOCUMENT_MAX_BYTES) {
+        oversized.push(FIELD_LABEL[field]);
+      }
+    }
+    if (oversized.length > 0) {
+      setError(`${oversized.join(", ")} must each be under 3MB. Please choose a smaller file.`);
+      return;
+    }
+
     startTransition(async () => {
+      const { requestId } = await beginServiceRequest();
+      const browserSupabase = createClient();
+
+      for (const field of SERVICE_DOCUMENT_FIELDS) {
+        const file = formData.get(field);
+        if (!(file instanceof File) || file.size === 0) {
+          setError(`${FIELD_LABEL[field]} is required for this request.`);
+          return;
+        }
+
+        setUploadStatus(`Uploading ${FIELD_LABEL[field]}…`);
+        const uploadUrl = await createServiceDocumentUploadUrl(requestId, field, file.type);
+        if (uploadUrl.error || !uploadUrl.path || !uploadUrl.token) {
+          setError(uploadUrl.error ?? `Couldn't prepare ${FIELD_LABEL[field]} for upload.`);
+          setUploadStatus(null);
+          return;
+        }
+
+        const { error: putError } = await browserSupabase.storage
+          .from("service-documents")
+          .uploadToSignedUrl(uploadUrl.path, uploadUrl.token, file);
+        if (putError) {
+          setError(`Couldn't upload ${FIELD_LABEL[field]}: ${putError.message}`);
+          setUploadStatus(null);
+          return;
+        }
+
+        formData.set(`${field}_path`, uploadUrl.path);
+        formData.delete(field);
+      }
+
+      setUploadStatus(null);
+      formData.set("request_id", requestId);
+
       // On success this never resolves — submitServiceRequest redirects the
       // browser to Stripe instead of returning. It only returns at all when
       // there's a validation error.
@@ -187,6 +257,9 @@ export default function ServiceRequestForm() {
         </span>
       </label>
       <input id="sr-residency" name="proof_of_residency" type="file" accept={FILE_ACCEPT} required />
+      <p style={{ fontSize: 12, color: "var(--ink-soft)", marginTop: -6, marginBottom: 0 }}>
+        Each file must be under 3MB.
+      </p>
 
       <label className="f" htmlFor="sr-notes">
         Anything else the committee should know? <span style={{ fontWeight: 400, color: "var(--ink-soft)" }}>(optional)</span>
@@ -217,7 +290,7 @@ export default function ServiceRequestForm() {
       )}
 
       <button className="btn btn-primary" style={{ width: "100%", marginTop: 12 }} disabled={pending}>
-        {pending ? "Please wait…" : `Pay ${formatServiceFee(feeCents)} and submit request`}
+        {uploadStatus ?? (pending ? "Please wait…" : `Pay ${formatServiceFee(feeCents)} and submit request`)}
       </button>
       <p style={{ fontSize: 12, color: "var(--ink-soft)", marginTop: 8, textAlign: "center" }}>
         Payment is processed by Stripe — card details never touch the ABAC website. The
