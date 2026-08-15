@@ -29,13 +29,13 @@ set search_path = public
 stable
 as $$
   select
-    m.id,
+    m.id as member_id,
     m.email,
     m.name,
     m.member_no,
-    extract(year from coalesce(m.joined_at, m.created_at))::int,
+    extract(year from coalesce(m.joined_at, m.created_at))::int as member_year,
     m.expires_at,
-    '14d'
+    '14d' as reminder_kind
   from public.members m
   where m.status = 'active'
     and m.expires_at is not null
@@ -45,13 +45,13 @@ as $$
   union all
 
   select
-    m.id,
+    m.id as member_id,
     m.email,
     m.name,
     m.member_no,
-    extract(year from coalesce(m.joined_at, m.created_at))::int,
+    extract(year from coalesce(m.joined_at, m.created_at))::int as member_year,
     m.expires_at,
-    'expired'
+    'expired' as reminder_kind
   from public.members m
   where m.status = 'active'
     and m.expires_at is not null
