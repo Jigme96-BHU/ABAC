@@ -8,9 +8,10 @@ import { mailer, MAIL_FROM } from "@/lib/mail";
 import { corporatePaymentLinkEmail } from "@/lib/emails/corporate-payment-link";
 import { corporateRejectedEmail } from "@/lib/emails/corporate-rejected";
 import { welcomeEmail } from "@/lib/emails/welcome";
+import { serviceDocumentReadyEmail } from "@/lib/emails/service-document-ready";
 import { formatMemberNo, formatDate } from "@/lib/member-number";
 import { CORPORATE_TIER_FEES_CENTS, corporateTierLabel, type CorporateTier } from "@/lib/corporate-tiers";
-import { isValidCid } from "@/lib/validation";
+import { serviceTypeLabel } from "@/lib/service-types";
 import type { MemberRow, ServiceRequestRow, CorporateMemberRow } from "@/lib/supabase/types";
 
 export type EventInput = {
@@ -611,6 +612,106 @@ export async function deleteServiceRequest(id: string) {
   return { error: null };
 }
 
+/** Same parallel-lookups-merged-by-id shape as searchMembers (app/admin/
+ *  actions.ts) — a single `.or()` filter string branching on whether the
+ *  query looks numeric is exactly what silently broke email search there
+ *  (see the commit that fixed it), so this never does that in the first
+ *  place. */
+export async function searchServiceRequests(
+  query: string
+): Promise<{ error: string | null; results: ServiceRequestRow[] }> {
+  const q = query.trim();
+  if (!q) return { error: null, results: [] };
+
+  const supabase = await createClient();
+  const escaped = q.replace(/[%_]/g, "\\$&");
+  const digitsOnly = q.replace(/\D/g, "");
+
+  const lookups = [
+    supabase.from("service_requests").select("*").ilike("requester_name", `%${escaped}%`).limit(50).returns<ServiceRequestRow[]>(),
+    supabase.from("service_requests").select("*").ilike("email", `%${escaped}%`).limit(50).returns<ServiceRequestRow[]>(),
+  ];
+  if (digitsOnly) {
+    lookups.push(
+      supabase.from("service_requests").select("*").ilike("phone", `%${digitsOnly}%`).limit(50).returns<ServiceRequestRow[]>()
+    );
+  }
+
+  const responses = await Promise.all(lookups);
+  const failed = responses.find((r) => r.error);
+  if (failed?.error) return { error: failed.error.message, results: [] };
+
+  const merged = new Map<string, ServiceRequestRow>();
+  for (const r of responses) {
+    for (const row of r.data ?? []) merged.set(row.id, row);
+  }
+
+  const results = [...merged.values()]
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .slice(0, 50);
+
+  return { error: null, results };
+}
+
+/** Uploads the finished letter and emails it straight to the requester as a
+ *  real attachment — service-documents is a private bucket, so a link
+ *  would need to be signed and would eventually expire; an attachment
+ *  doesn't have that problem. Marks the request fulfilled so the dashboard
+ *  can show that at a glance, but doesn't touch `status` (payment vs
+ *  fulfilment are two different things — a request can be paid and still
+ *  awaiting fulfilment). Re-running this (e.g. to send a corrected version)
+ *  just overwrites rendered_document_path and re-sends. */
+export async function sendServiceDocument(id: string, formData: FormData): Promise<{ error: string | null }> {
+  const file = formData.get("document");
+  if (!(file instanceof File) || file.size === 0) {
+    return { error: "Please choose a file to send." };
+  }
+  const ext = DOCUMENT_EXT_BY_TYPE[file.type];
+  if (!ext) return { error: "File must be a PDF, DOC, or DOCX." };
+
+  const supabase = await createClient();
+  const { data: request, error: fetchError } = await supabase
+    .from("service_requests")
+    .select("service_type, requester_name, email")
+    .eq("id", id)
+    .single();
+  if (fetchError) return { error: fetchError.message };
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const path = `${id}-rendered-${Date.now().toString(36)}.${ext}`;
+  const { error: uploadError } = await supabase.storage
+    .from("service-documents")
+    .upload(path, buffer, { contentType: file.type });
+  if (uploadError) return { error: uploadError.message };
+
+  const now = new Date().toISOString();
+  const { error: updateError } = await supabase
+    .from("service_requests")
+    .update({ rendered_document_path: path, fulfilled_at: now })
+    .eq("id", id);
+  if (updateError) return { error: updateError.message };
+
+  try {
+    const { subject, text, html } = serviceDocumentReadyEmail({
+      requesterName: request.requester_name,
+      serviceLabel: serviceTypeLabel(request.service_type),
+    });
+    await mailer.sendMail({
+      from: MAIL_FROM,
+      to: request.email,
+      subject,
+      text,
+      html,
+      attachments: [{ filename: file.name || `document.${ext}`, content: buffer }],
+    });
+  } catch (err) {
+    return { error: err instanceof Error ? `Uploaded, but the email failed to send: ${err.message}` : "Uploaded, but the email failed to send." };
+  }
+
+  revalidatePath("/admin");
+  return { error: null };
+}
+
 // ---------------------------------------------------------------------------
 // Bulk email campaigns — admin can send mass announcements to filtered members
 // ---------------------------------------------------------------------------
@@ -629,7 +730,13 @@ export type BulkEmailFilter = {
 
 /** Recipients for the "community" audience — real `members` schema columns
  *  only (the previous version queried `first_name`/`active`, neither of
- *  which exist on this table; it silently errored or returned nothing). */
+ *  which exist on this table; it silently errored or returned nothing).
+ *
+ *  individualMemberIds is intentionally NOT applied here — those are
+ *  specific people the admin picked by name/email search regardless of
+ *  status/type/date, so they're fetched separately (see
+ *  individualCommunityRecipients below) and unioned in by sendBulkEmail,
+ *  rather than narrowing this filtered query down to just them. */
 async function communityRecipients(
   supabase: Awaited<ReturnType<typeof createClient>>,
   filter: BulkEmailFilter
@@ -638,7 +745,6 @@ async function communityRecipients(
   if (!filter.includeInactive) query = query.eq("status", "active");
   if (filter.dateRange?.start) query = query.gte("created_at", filter.dateRange.start);
   if (filter.dateRange?.end) query = query.lte("created_at", filter.dateRange.end);
-  if (filter.individualMemberIds?.length) query = query.in("id", filter.individualMemberIds);
 
   const { data, error } = await query;
   if (error) return { error: error.message, recipients: [] };
@@ -662,7 +768,8 @@ async function communityRecipients(
   return { error: null, recipients };
 }
 
-/** Recipients for the "corporate" audience — same idea, `corporate_members`. */
+/** Recipients for the "corporate" audience — same idea, `corporate_members`.
+ *  Same note as communityRecipients above re: individualMemberIds. */
 async function corporateRecipients(
   supabase: Awaited<ReturnType<typeof createClient>>,
   filter: BulkEmailFilter
@@ -672,7 +779,6 @@ async function corporateRecipients(
   if (filter.corporateTiers?.length) query = query.in("tier", filter.corporateTiers);
   if (filter.dateRange?.start) query = query.gte("created_at", filter.dateRange.start);
   if (filter.dateRange?.end) query = query.lte("created_at", filter.dateRange.end);
-  if (filter.individualMemberIds?.length) query = query.in("id", filter.individualMemberIds);
 
   const { data, error } = await query;
   if (error) return { error: error.message, recipients: [] };
@@ -689,6 +795,33 @@ async function corporateRecipients(
   return { error: null, recipients };
 }
 
+/** Specific people the admin found via search and added by hand — sent to
+ *  regardless of status, membership type, tier, or date range, since
+ *  picking someone by name is the admin overriding those filters on
+ *  purpose for this one campaign. */
+async function individualCommunityRecipients(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  ids: string[]
+): Promise<{ error: string | null; recipients: { email: string; name: string }[] }> {
+  if (ids.length === 0) return { error: null, recipients: [] };
+  const { data, error } = await supabase.from("members").select("email, name").in("id", ids);
+  if (error) return { error: error.message, recipients: [] };
+  return { error: null, recipients: (data ?? []).filter((m) => m.email) };
+}
+
+async function individualCorporateRecipients(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  ids: string[]
+): Promise<{ error: string | null; recipients: { email: string; name: string }[] }> {
+  if (ids.length === 0) return { error: null, recipients: [] };
+  const { data, error } = await supabase.from("corporate_members").select("email, business_name").in("id", ids);
+  if (error) return { error: error.message, recipients: [] };
+  return {
+    error: null,
+    recipients: (data ?? []).filter((m) => m.email).map((m) => ({ email: m.email, name: m.business_name })),
+  };
+}
+
 export async function sendBulkEmail(
   subject: string,
   message: string,
@@ -700,11 +833,27 @@ export async function sendBulkEmail(
   if (!user) return { error: "Not authenticated" };
 
   try {
-    const { error: fetchError, recipients } =
+    const { error: fetchError, recipients: filteredRecipients } =
       filter.audience === "corporate"
         ? await corporateRecipients(supabase, filter)
         : await communityRecipients(supabase, filter);
     if (fetchError) return { error: fetchError };
+
+    const { error: individualError, recipients: individualRecipients } = filter.individualMemberIds?.length
+      ? filter.audience === "corporate"
+        ? await individualCorporateRecipients(supabase, filter.individualMemberIds)
+        : await individualCommunityRecipients(supabase, filter.individualMemberIds)
+      : { error: null, recipients: [] };
+    if (individualError) return { error: individualError };
+
+    const seen = new Set<string>();
+    const recipients: { email: string; name: string }[] = [];
+    for (const r of [...filteredRecipients, ...individualRecipients]) {
+      const key = r.email.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      recipients.push(r);
+    }
 
     const { bulkAnnouncementEmail } = await import("@/lib/emails/bulk-announcement");
     const emailHtml = bulkAnnouncementEmail(subject, message);
@@ -907,90 +1056,6 @@ export async function searchMembers(query: string): Promise<{ error: string | nu
     .slice(0, 50);
 
   return { error: null, results };
-}
-
-const MEMBER_GENDERS = new Set(["Male", "Female", "Other", "Prefer not to say"]);
-
-/** Backfills a member who paid/registered outside the website (cash, bank
- *  transfer, a paper form at an event) — the admin equivalent of
- *  createCorporateMemberManually below, but activated immediately rather
- *  than left pending: unlike a corporate sponsorship, there's no separate
- *  approval step for a walk-in Community membership, and the admin adding
- *  this record is themselves the confirmation that payment was received.
- *
- *  members' public INSERT policy (0003_members.sql) only allows
- *  `status = 'pending'` or `status = 'active' with fee_cents = 0` — it
- *  can't insert an active *paid* row directly, by design, so a public
- *  request can never grant itself a paid membership without Stripe. An
- *  admin session already has an unconditional UPDATE policy on this table,
- *  so this inserts as 'pending' first (always allowed) and immediately
- *  activates it via that existing admin-only UPDATE — two RLS-legal steps,
- *  no new migration needed. */
-export async function createMemberManually(formData: FormData): Promise<{ error: string | null }> {
-  const email = String(formData.get("email") ?? "").trim();
-  const name = String(formData.get("name") ?? "").trim();
-  const gender = String(formData.get("gender") ?? "").trim();
-  const dob = String(formData.get("dob") ?? "");
-  const cid = String(formData.get("cid") ?? "").trim();
-  const phone = String(formData.get("phone") ?? "").trim();
-  const suburb = String(formData.get("suburb") ?? "").trim();
-  const membershipType = String(formData.get("membership_type") ?? "single");
-  const feeInput = String(formData.get("fee") ?? "").trim();
-  const joinedDateInput = String(formData.get("joined_date") ?? "").trim();
-
-  if (!email || !name || !dob || !cid) {
-    return { error: "Please fill in email, name, date of birth, and CID." };
-  }
-  if (!isValidCid(cid)) {
-    return { error: "CID must be exactly 11 digits." };
-  }
-  if (membershipType !== "single" && membershipType !== "family") {
-    return { error: "Please choose a membership type." };
-  }
-  const feeDollars = feeInput === "" ? 0 : Number(feeInput);
-  if (!Number.isFinite(feeDollars) || feeDollars < 0) {
-    return { error: "Please enter a valid fee amount (0 or more)." };
-  }
-
-  const joinedAt = joinedDateInput ? new Date(joinedDateInput) : new Date();
-  if (Number.isNaN(joinedAt.getTime())) {
-    return { error: "That joined date doesn't look right." };
-  }
-  const expiresAt = new Date(joinedAt);
-  expiresAt.setFullYear(expiresAt.getFullYear() + 1);
-
-  const supabase = await createClient();
-
-  const { data: inserted, error: insertError } = await supabase
-    .from("members")
-    .insert({
-      email,
-      name,
-      gender: MEMBER_GENDERS.has(gender) ? gender : null,
-      date_of_birth: dob,
-      cid,
-      phone: phone || null,
-      suburb: suburb || null,
-      fee_cents: Math.round(feeDollars * 100),
-      status: "pending",
-      membership_type: membershipType,
-    })
-    .select("id")
-    .single();
-  if (insertError) return { error: insertError.message };
-
-  const { error: activateError } = await supabase
-    .from("members")
-    .update({
-      status: "active",
-      joined_at: joinedAt.toISOString(),
-      expires_at: expiresAt.toISOString(),
-    })
-    .eq("id", inserted.id);
-  if (activateError) return { error: activateError.message };
-
-  revalidatePath("/admin");
-  return { error: null };
 }
 
 export async function deleteMember(id: string): Promise<{ error: string | null }> {
