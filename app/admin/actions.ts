@@ -10,6 +10,7 @@ import { corporateRejectedEmail } from "@/lib/emails/corporate-rejected";
 import { welcomeEmail } from "@/lib/emails/welcome";
 import { formatMemberNo, formatDate } from "@/lib/member-number";
 import { CORPORATE_TIER_FEES_CENTS, corporateTierLabel, type CorporateTier } from "@/lib/corporate-tiers";
+import { isValidCid } from "@/lib/validation";
 import type { MemberRow, ServiceRequestRow, CorporateMemberRow } from "@/lib/supabase/types";
 
 export type EventInput = {
@@ -848,31 +849,156 @@ export async function deleteTeamMember(id: string) {
 // the case-insensitive indexes added in 0020_admin_search_and_upload_limits.sql.
 // ---------------------------------------------------------------------------
 
+/** Escapes ILIKE wildcards so a literal "%" or "_" typed by the admin (rare,
+ *  but possible in a business/suburb name) doesn't act as a pattern. */
+function escapeIlike(s: string): string {
+  return s.replace(/[%_]/g, "\\$&");
+}
+
+/** Runs name/email/CID/member-number lookups in parallel and merges by id,
+ *  rather than one query with a comma-joined `.or()` filter string.
+ *
+ *  The previous version branched on "does the query contain any digit" to
+ *  decide between a member-number search and a name/email search — but
+ *  most real email addresses contain a digit somewhere (gmail addresses
+ *  routinely do), so searching by email silently took the member-number
+ *  branch and matched nothing. Running every applicable lookup at once
+ *  removes that branching entirely: a query is checked against name,
+ *  email, and CID regardless of whether it happens to contain digits, and
+ *  additionally against member_no when it parses as one. */
 export async function searchMembers(query: string): Promise<{ error: string | null; results: MemberRow[] }> {
   const q = query.trim();
   if (!q) return { error: null, results: [] };
 
   const supabase = await createClient();
-  let request = supabase.from("members").select("*").order("created_at", { ascending: false }).limit(50);
+  const escaped = escapeIlike(q);
+  const digitsOnly = q.replace(/\D/g, "");
+  const digitGroups = q.match(/\d+/g);
+  // "ABAC-2026-000123" or a bare number both mean member_no 123 — the last
+  // digit run in the query, since the year (if present) comes first.
+  const memberNo = digitGroups ? Number(digitGroups[digitGroups.length - 1]) : null;
 
-  // "ABAC-2026-000123" or a bare number both mean member_no 123 — an exact
-  // match beats a fuzzy name/email/CID search when the query is numeric.
-  const digits = q.match(/\d+/g);
-  if (digits && /^\d+$/.test(q.replace(/[^0-9]/g, "")) && digits.length > 0) {
-    const memberNo = Number(digits[digits.length - 1]);
-    if (Number.isSafeInteger(memberNo) && memberNo > 0) {
-      request = request.or(`member_no.eq.${memberNo},cid.ilike.%${q}%`);
-    } else {
-      request = request.ilike("cid", `%${q}%`);
-    }
-  } else {
-    const escaped = q.replace(/[%_]/g, "\\$&");
-    request = request.or(`name.ilike.%${escaped}%,email.ilike.%${escaped}%`);
+  const lookups = [
+    supabase.from("members").select("*").ilike("name", `%${escaped}%`).limit(50).returns<MemberRow[]>(),
+    supabase.from("members").select("*").ilike("email", `%${escaped}%`).limit(50).returns<MemberRow[]>(),
+  ];
+  if (digitsOnly) {
+    lookups.push(
+      supabase.from("members").select("*").ilike("cid", `%${digitsOnly}%`).limit(50).returns<MemberRow[]>()
+    );
+  }
+  if (memberNo !== null && Number.isSafeInteger(memberNo) && memberNo > 0) {
+    lookups.push(
+      supabase.from("members").select("*").eq("member_no", memberNo).limit(1).returns<MemberRow[]>()
+    );
   }
 
-  const { data, error } = await request.returns<MemberRow[]>();
-  if (error) return { error: error.message, results: [] };
-  return { error: null, results: data ?? [] };
+  const responses = await Promise.all(lookups);
+  const failed = responses.find((r) => r.error);
+  if (failed?.error) return { error: failed.error.message, results: [] };
+
+  const merged = new Map<string, MemberRow>();
+  for (const r of responses) {
+    for (const row of r.data ?? []) merged.set(row.id, row);
+  }
+
+  const results = [...merged.values()]
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .slice(0, 50);
+
+  return { error: null, results };
+}
+
+const MEMBER_GENDERS = new Set(["Male", "Female", "Other", "Prefer not to say"]);
+
+/** Backfills a member who paid/registered outside the website (cash, bank
+ *  transfer, a paper form at an event) — the admin equivalent of
+ *  createCorporateMemberManually below, but activated immediately rather
+ *  than left pending: unlike a corporate sponsorship, there's no separate
+ *  approval step for a walk-in Community membership, and the admin adding
+ *  this record is themselves the confirmation that payment was received.
+ *
+ *  members' public INSERT policy (0003_members.sql) only allows
+ *  `status = 'pending'` or `status = 'active' with fee_cents = 0` — it
+ *  can't insert an active *paid* row directly, by design, so a public
+ *  request can never grant itself a paid membership without Stripe. An
+ *  admin session already has an unconditional UPDATE policy on this table,
+ *  so this inserts as 'pending' first (always allowed) and immediately
+ *  activates it via that existing admin-only UPDATE — two RLS-legal steps,
+ *  no new migration needed. */
+export async function createMemberManually(formData: FormData): Promise<{ error: string | null }> {
+  const email = String(formData.get("email") ?? "").trim();
+  const name = String(formData.get("name") ?? "").trim();
+  const gender = String(formData.get("gender") ?? "").trim();
+  const dob = String(formData.get("dob") ?? "");
+  const cid = String(formData.get("cid") ?? "").trim();
+  const phone = String(formData.get("phone") ?? "").trim();
+  const suburb = String(formData.get("suburb") ?? "").trim();
+  const membershipType = String(formData.get("membership_type") ?? "single");
+  const feeInput = String(formData.get("fee") ?? "").trim();
+  const joinedDateInput = String(formData.get("joined_date") ?? "").trim();
+
+  if (!email || !name || !dob || !cid) {
+    return { error: "Please fill in email, name, date of birth, and CID." };
+  }
+  if (!isValidCid(cid)) {
+    return { error: "CID must be exactly 11 digits." };
+  }
+  if (membershipType !== "single" && membershipType !== "family") {
+    return { error: "Please choose a membership type." };
+  }
+  const feeDollars = feeInput === "" ? 0 : Number(feeInput);
+  if (!Number.isFinite(feeDollars) || feeDollars < 0) {
+    return { error: "Please enter a valid fee amount (0 or more)." };
+  }
+
+  const joinedAt = joinedDateInput ? new Date(joinedDateInput) : new Date();
+  if (Number.isNaN(joinedAt.getTime())) {
+    return { error: "That joined date doesn't look right." };
+  }
+  const expiresAt = new Date(joinedAt);
+  expiresAt.setFullYear(expiresAt.getFullYear() + 1);
+
+  const supabase = await createClient();
+
+  const { data: inserted, error: insertError } = await supabase
+    .from("members")
+    .insert({
+      email,
+      name,
+      gender: MEMBER_GENDERS.has(gender) ? gender : null,
+      date_of_birth: dob,
+      cid,
+      phone: phone || null,
+      suburb: suburb || null,
+      fee_cents: Math.round(feeDollars * 100),
+      status: "pending",
+      membership_type: membershipType,
+    })
+    .select("id")
+    .single();
+  if (insertError) return { error: insertError.message };
+
+  const { error: activateError } = await supabase
+    .from("members")
+    .update({
+      status: "active",
+      joined_at: joinedAt.toISOString(),
+      expires_at: expiresAt.toISOString(),
+    })
+    .eq("id", inserted.id);
+  if (activateError) return { error: activateError.message };
+
+  revalidatePath("/admin");
+  return { error: null };
+}
+
+export async function deleteMember(id: string): Promise<{ error: string | null }> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("members").delete().eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath("/admin");
+  return { error: null };
 }
 
 export type MemberDetail = {

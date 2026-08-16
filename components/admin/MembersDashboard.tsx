@@ -1,11 +1,14 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import {
   searchMembers,
   getMemberDetail,
   resendMembershipConfirmation,
   getMembersForExport,
+  createMemberManually,
+  deleteMember,
   type MemberDetail,
   type MembersExportFilter,
 } from "@/app/admin/actions";
@@ -42,16 +45,22 @@ const EXPORT_COLUMNS: CsvColumn<MemberRow>[] = [
 ];
 
 export default function MembersDashboard() {
-  const [view, setView] = useState<"search" | "bulk">("search");
+  const [view, setView] = useState<"search" | "add" | "bulk">("search");
 
   return (
     <div>
-      <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+      <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
         <button
           className={view === "search" ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"}
           onClick={() => setView("search")}
         >
           Search a member
+        </button>
+        <button
+          className={view === "add" ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"}
+          onClick={() => setView("add")}
+        >
+          + Add manually
         </button>
         <button
           className={view === "bulk" ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"}
@@ -61,7 +70,13 @@ export default function MembersDashboard() {
         </button>
       </div>
 
-      {view === "search" ? <MemberSearchView /> : <MemberBulkExportView />}
+      {view === "search" ? (
+        <MemberSearchView />
+      ) : view === "add" ? (
+        <MemberAddForm onDone={() => setView("search")} />
+      ) : (
+        <MemberBulkExportView />
+      )}
     </div>
   );
 }
@@ -74,17 +89,21 @@ function MemberSearchView() {
   const [resendMessage, setResendMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  function runSearch(e: React.FormEvent) {
+  function runSearch(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setDetail(null);
     startTransition(async () => {
-      const res = await searchMembers(query);
-      if (res.error) {
-        setError(res.error);
-        return;
+      try {
+        const res = await searchMembers(query);
+        if (res.error) {
+          setError(res.error);
+          return;
+        }
+        setResults(res.results);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Search failed — please try again.");
       }
-      setResults(res.results);
     });
   }
 
@@ -92,12 +111,16 @@ function MemberSearchView() {
     setError(null);
     setResendMessage(null);
     startTransition(async () => {
-      const res = await getMemberDetail(id);
-      if (res.error) {
-        setError(res.error);
-        return;
+      try {
+        const res = await getMemberDetail(id);
+        if (res.error) {
+          setError(res.error);
+          return;
+        }
+        setDetail(res.detail);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Couldn't load that member — please try again.");
       }
-      setDetail(res.detail);
     });
   }
 
@@ -106,6 +129,19 @@ function MemberSearchView() {
     startTransition(async () => {
       const res = await resendMembershipConfirmation(memberId);
       setResendMessage(res.error ? `Couldn't resend: ${res.error}` : "Confirmation email resent.");
+    });
+  }
+
+  function handleDelete(m: MemberRow) {
+    if (!confirm(`Delete ${m.name}'s membership record permanently? This can't be undone.`)) return;
+    startTransition(async () => {
+      const res = await deleteMember(m.id);
+      if (res.error) {
+        setError(res.error);
+        return;
+      }
+      setResults((prev) => prev.filter((r) => r.id !== m.id));
+      if (detail?.member.id === m.id) setDetail(null);
     });
   }
 
@@ -135,6 +171,7 @@ function MemberSearchView() {
           detail={detail}
           onClose={() => setDetail(null)}
           onResend={handleResend}
+          onDelete={handleDelete}
           resendMessage={resendMessage}
           pending={pending}
         />
@@ -158,9 +195,12 @@ function MemberSearchView() {
                 <td>{m.email}</td>
                 <td>{m.membership_type === "family" ? "Family" : "Single"}{m.is_dependent ? " (dependent)" : ""}</td>
                 <td>{statusLabel(m)}</td>
-                <td style={{ textAlign: "right" }}>
-                  <button className="btn btn-ghost btn-sm" onClick={() => openDetail(m.id)} disabled={pending}>
+                <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                  <button className="btn btn-ghost btn-sm" style={{ marginRight: 6 }} onClick={() => openDetail(m.id)} disabled={pending}>
                     View
+                  </button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => handleDelete(m)} disabled={pending}>
+                    Delete
                   </button>
                 </td>
               </tr>
@@ -178,12 +218,14 @@ function MemberDetailPanel({
   detail,
   onClose,
   onResend,
+  onDelete,
   resendMessage,
   pending,
 }: {
   detail: MemberDetail;
   onClose: () => void;
   onResend: (memberId: string) => void;
+  onDelete: (member: MemberRow) => void;
   resendMessage: string | null;
   pending: boolean;
 }) {
@@ -265,16 +307,19 @@ function MemberDetailPanel({
         </table>
       )}
 
-      {member.status === "active" && (
-        <div>
+      <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+        {member.status === "active" && (
           <button className="btn btn-ghost btn-sm" onClick={() => onResend(member.id)} disabled={pending}>
             Resend confirmation email
           </button>
-          {resendMessage && (
-            <span style={{ marginLeft: 10, fontSize: 13, color: "var(--ink-soft)" }}>{resendMessage}</span>
-          )}
-        </div>
-      )}
+        )}
+        <button className="btn btn-ghost btn-sm" style={{ color: "#c33" }} onClick={() => onDelete(member)} disabled={pending}>
+          Delete member
+        </button>
+        {resendMessage && (
+          <span style={{ fontSize: 13, color: "var(--ink-soft)" }}>{resendMessage}</span>
+        )}
+      </div>
     </div>
   );
 }
@@ -342,5 +387,116 @@ function MemberBulkExportView() {
       </button>
       {message && <p style={{ marginTop: 10, fontSize: 13, color: "var(--ink-soft)" }}>{message}</p>}
     </div>
+  );
+}
+
+function MemberAddForm({ onDone }: { onDone: () => void }) {
+  const [membershipType, setMembershipType] = useState<"single" | "family">("single");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const router = useRouter();
+
+  function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    const formData = new FormData(e.currentTarget);
+    formData.set("membership_type", membershipType);
+    startTransition(async () => {
+      const result = await createMemberManually(formData);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      router.refresh();
+      onDone();
+    });
+  }
+
+  return (
+    <form onSubmit={submit} className="form-card" style={{ maxWidth: 520 }}>
+      <p style={{ color: "var(--ink-soft)", fontSize: 13, marginTop: 0 }}>
+        For a member who paid or registered outside the website — cash, bank transfer, or a
+        paper form at an event. This activates the membership immediately; use it only once
+        payment has actually been received.
+      </p>
+
+      <label className="f" style={{ marginTop: 0 }}>Email</label>
+      <input name="email" type="email" required />
+
+      <label className="f">Name</label>
+      <input name="name" type="text" required placeholder="Full name as on their Citizenship ID" />
+
+      <div className="two">
+        <div>
+          <label className="f">Sex (optional)</label>
+          <select name="gender" defaultValue="">
+            <option value="">Select</option>
+            <option>Male</option>
+            <option>Female</option>
+            <option>Other</option>
+            <option>Prefer not to say</option>
+          </select>
+        </div>
+        <div>
+          <label className="f">Date of birth</label>
+          <input name="dob" type="date" required />
+        </div>
+      </div>
+
+      <label className="f">Citizenship ID (CID)</label>
+      <input
+        name="cid"
+        type="text"
+        required
+        inputMode="numeric"
+        pattern="\d{11}"
+        maxLength={11}
+        title="CID must be exactly 11 digits"
+        placeholder="11-digit CID number"
+      />
+
+      <div className="two">
+        <div>
+          <label className="f">Phone (optional)</label>
+          <input name="phone" type="text" />
+        </div>
+        <div>
+          <label className="f">Suburb (optional)</label>
+          <input name="suburb" type="text" />
+        </div>
+      </div>
+
+      <label className="f">Membership type</label>
+      <select value={membershipType} onChange={(e) => setMembershipType(e.target.value as "single" | "family")}>
+        <option value="single">Single</option>
+        <option value="family">Family</option>
+      </select>
+
+      <div className="two">
+        <div>
+          <label className="f">Fee paid (AUD)</label>
+          <input name="fee" type="number" min="0" step="0.01" defaultValue={membershipType === "family" ? "30" : "20"} />
+        </div>
+        <div>
+          <label className="f">Joined date</label>
+          <input name="joined_date" type="date" defaultValue={new Date().toISOString().slice(0, 10)} />
+        </div>
+      </div>
+
+      {error && (
+        <div className="notice warn" style={{ marginTop: 12 }}>
+          {error}
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
+        <button className="btn btn-primary" disabled={pending}>
+          {pending ? "Adding…" : "Add member"}
+        </button>
+        <button type="button" className="btn btn-ghost" onClick={onDone} disabled={pending}>
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }
