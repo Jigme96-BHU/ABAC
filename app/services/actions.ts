@@ -8,6 +8,7 @@ import {
   parseMemberNo,
   serviceFeeCents,
   serviceTypeLabel,
+  type ServiceDocumentField,
 } from "@/lib/service-types";
 
 export type ServiceSubmitResult = { error: string };
@@ -72,15 +73,6 @@ const DOCUMENT_EXT_BY_TYPE: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/png": "png",
 };
-
-export const SERVICE_DOCUMENT_FIELDS = ["passport", "visa", "photo_id", "proof_of_residency"] as const;
-export type ServiceDocumentField = (typeof SERVICE_DOCUMENT_FIELDS)[number];
-
-/** 3MB per file — enforced client-side before any upload starts (see
- *  ServiceRequestForm.tsx), and again by Storage itself via the bucket's
- *  file_size_limit (0020_admin_search_and_upload_limits.sql), so a tampered
- *  client can't smuggle a larger file past the visible check. */
-export const SERVICE_DOCUMENT_MAX_BYTES = 3 * 1024 * 1024;
 
 /** Mints a request id up front so every document a requester uploads —
  *  before the request row itself exists — can share one stable prefix in

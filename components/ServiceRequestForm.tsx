@@ -6,18 +6,18 @@ import {
   lookupMemberForService,
   beginServiceRequest,
   createServiceDocumentUploadUrl,
-  SERVICE_DOCUMENT_FIELDS,
-  SERVICE_DOCUMENT_MAX_BYTES,
   type MemberLookup,
-  type ServiceDocumentField,
 } from "@/app/services/actions";
 import { createClient } from "@/lib/supabase/client";
 import {
   SERVICE_TYPES,
   SERVICE_FEE_MEMBER_CENTS,
   SERVICE_FEE_NON_MEMBER_CENTS,
+  SERVICE_DOCUMENT_FIELDS,
+  SERVICE_DOCUMENT_MAX_BYTES,
   formatServiceFee,
   type ServiceType,
+  type ServiceDocumentField,
 } from "@/lib/service-types";
 import { formatMemberNo } from "@/lib/member-number";
 
