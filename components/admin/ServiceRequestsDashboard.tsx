@@ -6,8 +6,11 @@ import {
   getServiceDocumentUrl,
   deleteServiceRequest,
   searchServiceRequests,
+  createRenderedDocumentUploadUrl,
   sendServiceDocument,
+  RENDERED_DOCUMENT_MAX_BYTES,
 } from "@/app/admin/actions";
+import { createClient } from "@/lib/supabase/client";
 import { serviceTypeLabel } from "@/lib/service-types";
 import type { ServiceRequestRow } from "@/lib/supabase/types";
 
@@ -87,17 +90,7 @@ function ServiceSearchView() {
 function RequestsTable({ requests }: { requests: ServiceRequestRow[] }) {
   const [pending, startTransition] = useTransition();
   const [busyPath, setBusyPath] = useState<string | null>(null);
-  const [sendingId, setSendingId] = useState<string | null>(null);
-  const [rowMessage, setRowMessage] = useState<Record<string, string>>({});
   const router = useRouter();
-
-  function clearRowMessage(id: string) {
-    setRowMessage((prev) => {
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
-  }
 
   function handleView(path: string) {
     setBusyPath(path);
@@ -117,22 +110,6 @@ function RequestsTable({ requests }: { requests: ServiceRequestRow[] }) {
     startTransition(async () => {
       await deleteServiceRequest(r.id);
       router.refresh();
-    });
-  }
-
-  function handleSendDocument(e: FormEvent<HTMLFormElement>, r: ServiceRequestRow) {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    clearRowMessage(r.id);
-    setSendingId(r.id);
-    startTransition(async () => {
-      const result = await sendServiceDocument(r.id, formData);
-      setSendingId(null);
-      setRowMessage((prev) => ({
-        ...prev,
-        [r.id]: result.error ? `Couldn't send: ${result.error}` : `Document emailed to ${r.email}.`,
-      }));
-      if (!result.error) router.refresh();
     });
   }
 
@@ -186,26 +163,7 @@ function RequestsTable({ requests }: { requests: ServiceRequestRow[] }) {
             <td>{new Date(r.created_at).toLocaleDateString("en-AU")}</td>
             <td style={{ minWidth: 220 }}>
               {r.status === "active" ? (
-                <form onSubmit={(e) => handleSendDocument(e, r)}>
-                  <input
-                    name="document"
-                    type="file"
-                    accept="application/pdf,.pdf,application/msword,.doc,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx"
-                    required
-                    style={{ fontSize: 12, marginBottom: 4, maxWidth: 200 }}
-                  />
-                  <button className="btn btn-ghost btn-sm" disabled={pending && sendingId === r.id}>
-                    {pending && sendingId === r.id ? "Sending…" : r.fulfilled_at ? "Resend" : "Send"}
-                  </button>
-                  {r.fulfilled_at && (
-                    <div style={{ fontSize: 11, color: "var(--ink-soft)", marginTop: 4 }}>
-                      Sent {new Date(r.fulfilled_at).toLocaleDateString("en-AU")}
-                    </div>
-                  )}
-                  {rowMessage[r.id] && (
-                    <div style={{ fontSize: 11, color: "var(--ink-soft)", marginTop: 4 }}>{rowMessage[r.id]}</div>
-                  )}
-                </form>
+                <SendDocumentCell request={r} onSent={() => router.refresh()} />
               ) : (
                 <span style={{ fontSize: 12, color: "var(--ink-soft)" }}>Awaiting payment</span>
               )}
@@ -219,5 +177,109 @@ function RequestsTable({ requests }: { requests: ServiceRequestRow[] }) {
         ))}
       </tbody>
     </table>
+  );
+}
+
+/** Uploads straight to Supabase Storage via a signed URL rather than
+ *  through this form's own submit — routing a real scanned/signed letter
+ *  through a Next.js server action's request body hits its 1MB default
+ *  limit and fails silently, which is exactly what made the previous
+ *  version of this feature unreliable. No file-type restriction: "any
+ *  document file" is the point, so whatever extension the admin's file
+ *  actually has is what gets used. */
+function SendDocumentCell({ request, onSent }: { request: ServiceRequestRow; onSent: () => void }) {
+  const [writeEmailOpen, setWriteEmailOpen] = useState(false);
+  const [customMessage, setCustomMessage] = useState("");
+  const [status, setStatus] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    const file = formData.get("document");
+    setError(null);
+    setStatus(null);
+
+    if (!(file instanceof File) || file.size === 0) {
+      setError("Please choose a file to send.");
+      return;
+    }
+    if (file.size > RENDERED_DOCUMENT_MAX_BYTES) {
+      setError("That file is over 10MB — please choose a smaller one.");
+      return;
+    }
+
+    startTransition(async () => {
+      setStatus("Uploading…");
+      const uploadUrl = await createRenderedDocumentUploadUrl(request.id, file.name);
+      if (uploadUrl.error || !uploadUrl.path || !uploadUrl.token) {
+        setError(uploadUrl.error ?? "Couldn't prepare that file for upload.");
+        setStatus(null);
+        return;
+      }
+
+      const browserSupabase = createClient();
+      const { error: putError } = await browserSupabase.storage
+        .from("service-documents")
+        .uploadToSignedUrl(uploadUrl.path, uploadUrl.token, file);
+      if (putError) {
+        setError(`Couldn't upload the file: ${putError.message}`);
+        setStatus(null);
+        return;
+      }
+
+      setStatus("Sending email…");
+      const message = writeEmailOpen ? customMessage.trim() || undefined : undefined;
+      const result = await sendServiceDocument(request.id, uploadUrl.path, file.name, message);
+      setStatus(null);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      form.reset();
+      setCustomMessage("");
+      setWriteEmailOpen(false);
+      onSent();
+    });
+  }
+
+  return (
+    <form onSubmit={submit}>
+      <input name="document" type="file" required style={{ fontSize: 12, marginBottom: 4, maxWidth: 200 }} />
+
+      <div style={{ marginBottom: writeEmailOpen ? 6 : 4 }}>
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm"
+          style={{ padding: "3px 8px", fontSize: 11 }}
+          onClick={() => setWriteEmailOpen((o) => !o)}
+        >
+          {writeEmailOpen ? "Hide message" : "Write email"}
+        </button>
+      </div>
+
+      {writeEmailOpen && (
+        <textarea
+          value={customMessage}
+          onChange={(e) => setCustomMessage(e.target.value)}
+          placeholder="Optional note to include in the email…"
+          rows={3}
+          style={{ fontSize: 12, marginBottom: 6, maxWidth: 200, width: "100%" }}
+        />
+      )}
+
+      <button className="btn btn-ghost btn-sm" disabled={pending}>
+        {status ?? (request.fulfilled_at ? "Resend" : "Send")}
+      </button>
+
+      {request.fulfilled_at && !status && (
+        <div style={{ fontSize: 11, color: "var(--ink-soft)", marginTop: 4 }}>
+          Sent {new Date(request.fulfilled_at).toLocaleDateString("en-AU")}
+        </div>
+      )}
+      {error && <div style={{ fontSize: 11, color: "#c33", marginTop: 4 }}>{error}</div>}
+    </form>
   );
 }

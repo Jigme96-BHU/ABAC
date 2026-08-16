@@ -8,14 +8,21 @@ import { COLOR, escapeHtml, emailShell } from "./shared";
 export function serviceDocumentReadyEmail({
   requesterName,
   serviceLabel,
+  customMessage,
 }: {
   requesterName: string;
   serviceLabel: string;
+  /** Optional free-text the admin wrote for this specific send — shown to
+   *  the "Write email" toggle in the admin UI. Sits between the greeting
+   *  and the standard "please find attached" line, so it reads as added
+   *  context rather than replacing the template. */
+  customMessage?: string;
 }) {
   const subject = `Your ${serviceLabel} from ABAC is ready`;
 
+  const customText = customMessage?.trim() ? `\n${customMessage.trim()}\n` : "";
   const text = `Dear ${requesterName},
-
+${customText}
 Please find attached your ${serviceLabel} from the Australia–Bhutan Association of Canberra.
 
 If you have any questions, please contact us at bhutancanberra@gmail.com.
@@ -24,8 +31,13 @@ Tashi Delek,
 ABAC Committee
 bhutancanberra@gmail.com`;
 
+  const customHtml = customMessage?.trim()
+    ? `<p style="margin:0 0 20px;color:${COLOR.ink};font-size:15px;line-height:1.6;white-space:pre-wrap">${escapeHtml(customMessage.trim())}</p>`
+    : "";
+
   const body = `
     <p style="margin:0 0 16px;color:${COLOR.ink};font-size:15px">Dear ${escapeHtml(requesterName)},</p>
+    ${customHtml}
     <p style="margin:0 0 24px;color:${COLOR.ink};font-size:15px;line-height:1.6">
       Please find attached your <strong>${escapeHtml(serviceLabel)}</strong> from the
       Australia&ndash;Bhutan Association of Canberra.
