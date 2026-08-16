@@ -653,23 +653,53 @@ export async function searchServiceRequests(
   return { error: null, results };
 }
 
-/** Uploads the finished letter and emails it straight to the requester as a
- *  real attachment — service-documents is a private bucket, so a link
- *  would need to be signed and would eventually expire; an attachment
- *  doesn't have that problem. Marks the request fulfilled so the dashboard
- *  can show that at a glance, but doesn't touch `status` (payment vs
- *  fulfilment are two different things — a request can be paid and still
- *  awaiting fulfilment). Re-running this (e.g. to send a corrected version)
- *  just overwrites rendered_document_path and re-sends. */
-export async function sendServiceDocument(id: string, formData: FormData): Promise<{ error: string | null }> {
-  const file = formData.get("document");
-  if (!(file instanceof File) || file.size === 0) {
-    return { error: "Please choose a file to send." };
-  }
-  const ext = DOCUMENT_EXT_BY_TYPE[file.type];
-  if (!ext) return { error: "File must be a PDF, DOC, or DOCX." };
+/** 10MB — generous for a scanned/signed letter, while staying safely under
+ *  Gmail's ~25MB send limit once SMTP's base64 encoding overhead (~33%) is
+ *  factored in. Enforced client-side (ServiceRequestsDashboard.tsx) before
+ *  upload starts, and re-checked here since a tampered client could
+ *  otherwise skip the check. */
+export const RENDERED_DOCUMENT_MAX_BYTES = 10 * 1024 * 1024;
+
+/** Direct-to-storage upload, step 1 — same reason as
+ *  createServiceDocumentUploadUrl in app/services/actions.ts: routing the
+ *  file through this server action's own request body is capped at 1MB by
+ *  Next.js by default, which a real scanned/signed letter routinely
+ *  exceeds. A signed upload URL lets the browser PUT the file straight to
+ *  Supabase Storage instead. No MIME allowlist here — "any document file"
+ *  is the point, so the extension comes from whatever the admin actually
+ *  selected rather than a fixed PDF/DOC/DOCX map. */
+export async function createRenderedDocumentUploadUrl(
+  requestId: string,
+  filename: string
+): Promise<{ error: string | null; path?: string; token?: string }> {
+  const dot = filename.lastIndexOf(".");
+  const ext = dot > 0 ? filename.slice(dot + 1).toLowerCase().replace(/[^a-z0-9]/g, "") : "";
+  const path = `${requestId}-rendered-${Date.now().toString(36)}${ext ? `.${ext}` : ""}`;
 
   const supabase = await createClient();
+  const { data, error } = await supabase.storage.from("service-documents").createSignedUploadUrl(path);
+  if (error) return { error: error.message };
+
+  return { error: null, path, token: data.token };
+}
+
+/** Direct-to-storage upload, step 2 — the file is already in Storage by the
+ *  time this runs (see createRenderedDocumentUploadUrl above); this
+ *  downloads it back server-side to attach to the email (service-documents
+ *  is private, so a link would need to be signed and would eventually
+ *  expire — an attachment doesn't have that problem), then marks the
+ *  request fulfilled. Doesn't touch `status`: paid and fulfilled are
+ *  different things, and a request can be paid while still awaiting
+ *  fulfilment. Re-running this (e.g. to send a corrected version) just
+ *  overwrites rendered_document_path and re-sends. */
+export async function sendServiceDocument(
+  id: string,
+  path: string,
+  filename: string,
+  customMessage?: string
+): Promise<{ error: string | null }> {
+  const supabase = await createClient();
+
   const { data: request, error: fetchError } = await supabase
     .from("service_requests")
     .select("service_type, requester_name, email")
@@ -677,12 +707,14 @@ export async function sendServiceDocument(id: string, formData: FormData): Promi
     .single();
   if (fetchError) return { error: fetchError.message };
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const path = `${id}-rendered-${Date.now().toString(36)}.${ext}`;
-  const { error: uploadError } = await supabase.storage
+  const { data: downloaded, error: downloadError } = await supabase.storage
     .from("service-documents")
-    .upload(path, buffer, { contentType: file.type });
-  if (uploadError) return { error: uploadError.message };
+    .download(path);
+  if (downloadError) return { error: downloadError.message };
+  if (downloaded.size > RENDERED_DOCUMENT_MAX_BYTES) {
+    return { error: "That file is over 10MB — please choose a smaller one." };
+  }
+  const buffer = Buffer.from(await downloaded.arrayBuffer());
 
   const now = new Date().toISOString();
   const { error: updateError } = await supabase
@@ -695,6 +727,7 @@ export async function sendServiceDocument(id: string, formData: FormData): Promi
     const { subject, text, html } = serviceDocumentReadyEmail({
       requesterName: request.requester_name,
       serviceLabel: serviceTypeLabel(request.service_type),
+      customMessage,
     });
     await mailer.sendMail({
       from: MAIL_FROM,
@@ -702,7 +735,7 @@ export async function sendServiceDocument(id: string, formData: FormData): Promi
       subject,
       text,
       html,
-      attachments: [{ filename: file.name || `document.${ext}`, content: buffer }],
+      attachments: [{ filename: filename || "document", content: buffer }],
     });
   } catch (err) {
     return { error: err instanceof Error ? `Uploaded, but the email failed to send: ${err.message}` : "Uploaded, but the email failed to send." };
