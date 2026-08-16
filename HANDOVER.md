@@ -267,6 +267,14 @@ The site must not replace the live WordPress one until all of these are done.
       (`get_active_corporate_partners()` already returns `logo_path`, no
       other wiring needed). Admins can still replace or remove it from the
       Corporate tab in `/admin` at any point.
+- [ ] **Run the service request fulfillment migration**
+      (`0026_service_request_fulfillment.sql`, requires `0013`). Adds a
+      "Send document" action to the Services tab in `/admin` — once the
+      committee has written up the actual Letter of Residency or Character
+      Reference, an admin uploads it there and it's emailed straight to the
+      requester as a real attachment (not a link, since `service-documents`
+      is a private bucket). The Services tab also gained a search bar
+      (requester name / email / phone).
 - [ ] **Set up the daily expiry-reminder cron job.** Add a production
       `CRON_SECRET`. `vercel.json` already schedules a daily production call
       to `/api/members/expiry-reminders`; Vercel sends

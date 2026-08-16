@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { sendBulkEmail, type BulkEmailFilter } from "@/app/admin/actions";
+import { useState, useTransition } from "react";
+import { sendBulkEmail, searchMembers, searchCorporateMembers, type BulkEmailFilter } from "@/app/admin/actions";
+
+type IndividualRecipient = { id: string; name: string; email: string };
 
 export default function BulkEmailForm() {
   const [subject, setSubject] = useState("");
@@ -15,6 +17,50 @@ export default function BulkEmailForm() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ error?: string; success?: string } | null>(null);
   const [showPreview, setShowPreview] = useState(false);
+
+  const [individualQuery, setIndividualQuery] = useState("");
+  const [individualResults, setIndividualResults] = useState<IndividualRecipient[]>([]);
+  const [selectedIndividuals, setSelectedIndividuals] = useState<IndividualRecipient[]>([]);
+  const [individualSearching, startIndividualSearch] = useTransition();
+
+  function switchAudience(audience: "community" | "corporate") {
+    handleFilterChange("audience", audience);
+    // A selected person's id only makes sense against the table it was
+    // searched from — switching audience would otherwise silently carry
+    // over ids into the wrong table's lookup.
+    setSelectedIndividuals([]);
+    setIndividualResults([]);
+    setIndividualQuery("");
+  }
+
+  function runIndividualSearch() {
+    const q = individualQuery.trim();
+    if (!q) {
+      setIndividualResults([]);
+      return;
+    }
+    startIndividualSearch(async () => {
+      const res =
+        filter.audience === "corporate" ? await searchCorporateMembers(q) : await searchMembers(q);
+      if (res.error) {
+        setIndividualResults([]);
+        return;
+      }
+      const normalised: IndividualRecipient[] =
+        filter.audience === "corporate"
+          ? res.results.map((m: any) => ({ id: m.id, name: m.business_name, email: m.email }))
+          : res.results.map((m: any) => ({ id: m.id, name: m.name, email: m.email }));
+      setIndividualResults(normalised.filter((r) => r.email));
+    });
+  }
+
+  function addIndividual(person: IndividualRecipient) {
+    setSelectedIndividuals((prev) => (prev.some((p) => p.id === person.id) ? prev : [...prev, person]));
+  }
+
+  function removeIndividual(id: string) {
+    setSelectedIndividuals((prev) => prev.filter((p) => p.id !== id));
+  }
 
   const handleFilterChange = (key: keyof BulkEmailFilter, value: any) => {
     setFilter((prev) => ({ ...prev, [key]: value }));
@@ -57,7 +103,11 @@ export default function BulkEmailForm() {
     setLoading(true);
     setResult(null);
 
-    const res = await sendBulkEmail(subject, message, filter, attachments);
+    const filterWithIndividuals: BulkEmailFilter = {
+      ...filter,
+      individualMemberIds: selectedIndividuals.map((p) => p.id),
+    };
+    const res = await sendBulkEmail(subject, message, filterWithIndividuals, attachments);
 
     if (res.error) {
       setResult({ error: res.error });
@@ -67,6 +117,7 @@ export default function BulkEmailForm() {
       setMessage("");
       setFilter({ audience: filter.audience, membershipTypes: ["single", "family"], includeInactive: false });
       setAttachments([]);
+      setSelectedIndividuals([]);
     }
     setLoading(false);
   };
@@ -124,7 +175,7 @@ export default function BulkEmailForm() {
           <div style={{ display: "flex", gap: 8 }}>
             <button
               type="button"
-              onClick={() => handleFilterChange("audience", "community")}
+              onClick={() => switchAudience("community")}
               style={{
                 padding: "6px 14px",
                 borderRadius: 4,
@@ -139,7 +190,7 @@ export default function BulkEmailForm() {
             </button>
             <button
               type="button"
-              onClick={() => handleFilterChange("audience", "corporate")}
+              onClick={() => switchAudience("corporate")}
               style={{
                 padding: "6px 14px",
                 borderRadius: 4,
@@ -259,6 +310,127 @@ export default function BulkEmailForm() {
           />
           {" "}Include Inactive Members
         </label>
+      </div>
+
+      <div style={{ marginBottom: 20, padding: 16, background: "#f5f5f5", borderRadius: 8 }}>
+        <h4 style={{ marginTop: 0, marginBottom: 4 }}>Also send to specific people</h4>
+        <p style={{ fontSize: 12, color: "#666", margin: "0 0 12px" }}>
+          Search by name or email and add anyone who should get this email regardless of the
+          filters above — useful for sending to just a few individuals.
+        </p>
+
+        <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+          <input
+            type="text"
+            value={individualQuery}
+            onChange={(e) => setIndividualQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                runIndividualSearch();
+              }
+            }}
+            placeholder={filter.audience === "corporate" ? "Business name or email" : "Name or email"}
+            style={{
+              flex: 1,
+              padding: "8px 12px",
+              border: "1px solid #e0e0e0",
+              borderRadius: 4,
+              fontSize: 14,
+            }}
+          />
+          <button
+            type="button"
+            onClick={runIndividualSearch}
+            disabled={individualSearching}
+            style={{
+              padding: "8px 16px",
+              background: "#16324F",
+              color: "#fff",
+              border: "none",
+              borderRadius: 4,
+              cursor: "pointer",
+              fontSize: 14,
+            }}
+          >
+            {individualSearching ? "Searching…" : "Search"}
+          </button>
+        </div>
+
+        {individualResults.length > 0 && (
+          <div style={{ marginBottom: 12, border: "1px solid #e0e0e0", borderRadius: 4, background: "#fff" }}>
+            {individualResults.map((person) => {
+              const alreadyAdded = selectedIndividuals.some((p) => p.id === person.id);
+              return (
+                <div
+                  key={person.id}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    padding: "8px 12px",
+                    borderBottom: "1px solid #f0f0f0",
+                    fontSize: 13,
+                  }}
+                >
+                  <span>
+                    <strong>{person.name}</strong> · {person.email}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => addIndividual(person)}
+                    disabled={alreadyAdded}
+                    style={{
+                      padding: "4px 10px",
+                      background: alreadyAdded ? "#eee" : "#16324F",
+                      color: alreadyAdded ? "#999" : "#fff",
+                      border: "none",
+                      borderRadius: 4,
+                      cursor: alreadyAdded ? "default" : "pointer",
+                      fontSize: 12,
+                    }}
+                  >
+                    {alreadyAdded ? "Added" : "+ Add"}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {selectedIndividuals.length > 0 && (
+          <div>
+            <p style={{ fontSize: 12, fontWeight: 500, margin: "0 0 6px" }}>
+              Selected ({selectedIndividuals.length}):
+            </p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {selectedIndividuals.map((person) => (
+                <span
+                  key={person.id}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "4px 10px",
+                    background: "#e8eef4",
+                    borderRadius: 999,
+                    fontSize: 12,
+                  }}
+                >
+                  {person.name}
+                  <button
+                    type="button"
+                    onClick={() => removeIndividual(person.id)}
+                    aria-label={`Remove ${person.name}`}
+                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, padding: 0, lineHeight: 1 }}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <div style={{ marginBottom: 20 }}>
