@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import {
   approveCorporateMember,
   rejectCorporateMember,
-  uploadCorporateLogo,
+  createAdminCorporateLogoUploadUrl,
+  recordCorporateLogo,
   removeCorporateLogo,
   searchCorporateMembers,
   createCorporateMemberManually,
@@ -15,6 +16,7 @@ import {
   hideCorporatePartner,
   type CorporateExportFilter,
 } from "@/app/admin/actions";
+import { createClient } from "@/lib/supabase/client";
 import { downloadCsv, type CsvColumn } from "@/lib/csv";
 import { CORPORATE_TIERS, corporateTierLabel, type CorporateTier } from "@/lib/corporate-tiers";
 import type { CorporateMemberRow } from "@/lib/supabase/types";
@@ -120,9 +122,29 @@ function CorporateTable({ members }: { members: CorporateMemberRow[] }) {
   function handleLogoSubmit(e: FormEvent<HTMLFormElement>, id: string) {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    const file = formData.get("logo");
     clearRowError(id);
+    if (!(file instanceof File) || file.size === 0) {
+      setRowError((prev) => ({ ...prev, [id]: "Please choose a logo file to upload." }));
+      return;
+    }
     startTransition(async () => {
-      const result = await uploadCorporateLogo(id, formData);
+      // Straight to Storage from the browser — a high-res logo export can
+      // exceed Next.js's 1MB default server-action request-body limit.
+      const uploadUrl = await createAdminCorporateLogoUploadUrl(file.type);
+      if (uploadUrl.error || !uploadUrl.path || !uploadUrl.token) {
+        setRowError((prev) => ({ ...prev, [id]: uploadUrl.error ?? "Couldn't prepare that file for upload." }));
+        return;
+      }
+      const browserSupabase = createClient();
+      const { error: putError } = await browserSupabase.storage
+        .from("corporate-logos")
+        .uploadToSignedUrl(uploadUrl.path, uploadUrl.token, file);
+      if (putError) {
+        setRowError((prev) => ({ ...prev, [id]: `Couldn't upload the logo: ${putError.message}` }));
+        return;
+      }
+      const result = await recordCorporateLogo(id, uploadUrl.path);
       if (result.error) setRowError((prev) => ({ ...prev, [id]: result.error! }));
       router.refresh();
     });

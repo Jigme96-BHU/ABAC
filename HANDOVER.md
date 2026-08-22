@@ -267,7 +267,11 @@ The site must not replace the live WordPress one until all of these are done.
       size for that path, which made larger uploads fail silently before
       this fix. Video uploads already worked this way; photos and documents
       now match.
-- [ ] **Run the corporate logo public-upload migration**
+- [ ] **Run the corporate logo public-upload migration** — **confirmed
+      still missing on the live site as of 2026-08-22** (`corporate-logos`
+      still rejects a public upload with "new row violates row-level
+      security policy"; verified by submitting a real test application
+      through `/join`).
       (`0025_corporate_logo_public_upload.sql`, requires `0012`). Lets a
       corporate applicant attach their logo directly on the public
       registration form (`components/CorporateForm.tsx`), instead of only
@@ -293,6 +297,26 @@ The site must not replace the live WordPress one until all of these are done.
       never updated to match — selecting that category and submitting
       fails with a database error right now. This migration widens the
       constraint to accept it.
+- [ ] **Volunteers/Members/Corporate reliability pass (2026-08-22, no new
+      migration).** Reviewed all three admin tabs end to end:
+      - Corporate application logo/certificate uploads (the public
+        `/join` form) and the admin logo upload/replace tool now go
+        straight to Storage from the browser, same 1MB server-action
+        body-size fix already applied elsewhere — previously a real logo
+        or scanned certificate could fail silently with no error shown.
+      - Members/Corporate search rewritten off a single `.or()` filter
+        string onto parallel per-field lookups — a business name or ABN
+        containing a comma could otherwise break the filter outright.
+      - The Members bulk export's "Active only"/"Inactive only" filter
+        now cross-checks `expires_at`, matching what the search results
+        already show on screen — previously a membership that expired
+        earlier the same day could still export as "active" for up to 24
+        hours, until the nightly cron caught up.
+      - Volunteer registration now emails the volunteer themselves a
+        confirmation (previously only a minor's guardian was ever
+        emailed; an adult volunteer got no confirmation of any kind).
+      - Added a search bar to the Volunteers tab, matching
+        Members/Corporate/Services.
 - [ ] **Set up the daily expiry-reminder cron job.** Add a production
       `CRON_SECRET`. `vercel.json` already schedules a daily production call
       to `/api/members/expiry-reminders`; Vercel sends

@@ -626,6 +626,46 @@ const LOGO_EXT_BY_TYPE: Record<string, string> = {
   "image/gif": "gif",
 };
 
+/** Direct-to-storage upload, step 1, for the Business Certificate — a real
+ *  scanned registration document (a photographed multi-page PDF) routinely
+ *  exceeds Next.js's 1MB default server-action request-body limit, which
+ *  routing it through this form's own submit hit silently: the form has no
+ *  try/catch around the action call, so a body-size failure just did
+ *  nothing visible. corporate-documents' insert policy is public (no
+ *  admin gate — see 0022_corporate_business_certificate.sql), so an
+ *  anonymous applicant can mint and use this signed URL directly. */
+export async function createCorporateCertificateUploadUrl(
+  contentType: string
+): Promise<{ error: string | null; path?: string; token?: string }> {
+  const ext = CERTIFICATE_EXT_BY_TYPE[contentType];
+  if (!ext) return { error: "Business Certificate must be a PDF, JPG, or PNG file." };
+
+  const supabase = await createClient();
+  const path = `${crypto.randomUUID()}-certificate.${ext}`;
+  const { data, error } = await supabase.storage.from("corporate-documents").createSignedUploadUrl(path);
+  if (error) return { error: error.message };
+
+  return { error: null, path, token: data.token };
+}
+
+/** Same reasoning as createCorporateCertificateUploadUrl above, for the
+ *  Business Logo — corporate-logos' insert policy is public too (see
+ *  0025_corporate_logo_public_upload.sql, which widened it from
+ *  admin-only specifically so applicants could upload here). */
+export async function createCorporateLogoUploadUrl(
+  contentType: string
+): Promise<{ error: string | null; path?: string; token?: string }> {
+  const ext = LOGO_EXT_BY_TYPE[contentType];
+  if (!ext) return { error: "Business Logo must be a PNG, JPG, WebP, SVG, or GIF file." };
+
+  const supabase = await createClient();
+  const path = `corporate-${crypto.randomUUID()}.${ext}`;
+  const { data, error } = await supabase.storage.from("corporate-logos").createSignedUploadUrl(path);
+  if (error) return { error: error.message };
+
+  return { error: null, path, token: data.token };
+}
+
 export async function submitCorporateApplication(formData: FormData): Promise<CorporateSubmitResult> {
   const businessName = String(formData.get("business_name") ?? "").trim();
   const abn = String(formData.get("abn") ?? "").trim();
@@ -647,46 +687,21 @@ export async function submitCorporateApplication(formData: FormData): Promise<Co
 
   const supabase = await createClient();
 
-  // Business Certificate is optional — not every applicant has one on hand
-  // when they apply, and the committee can always follow up.
-  let certificatePath: string | null = null;
-  const certificate = formData.get("business_certificate");
-  if (certificate instanceof File && certificate.size > 0) {
-    const ext = CERTIFICATE_EXT_BY_TYPE[certificate.type];
-    if (!ext) return { ok: false, error: "Business Certificate must be a PDF, JPG, or PNG file." };
+  // Both files are already in Storage by the time this runs (see
+  // createCorporateCertificateUploadUrl/createCorporateLogoUploadUrl above
+  // and CorporateForm.tsx's submit handler) — this only resolves paths.
+  // Both remain optional: not every applicant has a certificate on hand
+  // when they apply (the committee can always follow up), and a missing
+  // logo can be added later, either by the applicant contacting the
+  // committee or the admin dashboard's own logo upload/replace tool.
+  const certificatePath = String(formData.get("certificate_path") ?? "").trim() || null;
 
-    const id = crypto.randomUUID();
-    const buffer = Buffer.from(await certificate.arrayBuffer());
-    const { error: uploadError } = await supabase.storage
-      .from("corporate-documents")
-      .upload(`${id}-certificate.${ext}`, buffer, { contentType: certificate.type });
-    if (uploadError) return { ok: false, error: uploadError.message };
-    certificatePath = `${id}-certificate.${ext}`;
-  }
-
-  // Logo is optional too — an applicant who doesn't have one on hand yet
-  // can still add it later, either by contacting the committee or (once
-  // active) it's the same public bucket the admin dashboard's own logo
-  // upload/replace tool already writes to, so this "auto-uploads with the
-  // business name" the moment get_active_corporate_partners() starts
-  // returning this row — no separate wiring needed on the /partners side.
   let logoPath: string | null = null;
-  const logo = formData.get("logo");
-  if (logo instanceof File && logo.size > 0) {
-    const ext = LOGO_EXT_BY_TYPE[logo.type];
-    if (!ext) return { ok: false, error: "Business Logo must be a PNG, JPG, WebP, SVG, or GIF file." };
-
-    const logoId = crypto.randomUUID();
-    const buffer = Buffer.from(await logo.arrayBuffer());
-    const path = `corporate-${logoId}.${ext}`;
-    const { error: uploadError } = await supabase.storage
-      .from("corporate-logos")
-      .upload(path, buffer, { contentType: logo.type });
-    if (uploadError) return { ok: false, error: uploadError.message };
-
+  const logoStoragePath = String(formData.get("logo_path") ?? "").trim();
+  if (logoStoragePath) {
     const {
       data: { publicUrl },
-    } = supabase.storage.from("corporate-logos").getPublicUrl(path);
+    } = supabase.storage.from("corporate-logos").getPublicUrl(logoStoragePath);
     logoPath = publicUrl;
   }
 
