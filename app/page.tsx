@@ -163,7 +163,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="block">
+      <section className="block" id="benefits">
         <div className="wrap">
           <div className="section-head">
             <span className="dz-eyebrow">འཐུས་མིའི་ཁེ་དབང་།</span>
