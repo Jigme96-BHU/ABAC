@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import { useState, useTransition, type FormEvent } from "react";
-import { createTeamMember, updateTeamMember } from "@/app/admin/actions";
+import { createTeamMember, updateTeamMember, createTeamPhotoUploadUrl } from "@/app/admin/actions";
+import { createClient } from "@/lib/supabase/client";
 import type { TeamMemberRow } from "@/lib/supabase/types";
 
 const CATEGORIES = [
@@ -12,6 +13,8 @@ const CATEGORIES = [
   { value: "former_presidents", label: "Former Presidents" },
 ];
 
+const PHOTO_ACCEPT = "image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,image/avif";
+
 export default function TeamMemberForm({
   editing,
   onDone,
@@ -20,13 +23,43 @@ export default function TeamMemberForm({
   onDone: () => void;
 }) {
   const [error, setError] = useState<string | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+    setUploadStatus(null);
     const formData = new FormData(e.currentTarget);
+
     startTransition(async () => {
+      // Straight to Storage from the browser — a real phone-camera photo
+      // routinely exceeds Next.js's 1MB default server-action
+      // request-body limit, so routing it through this form's own submit
+      // failed silently.
+      const photo = formData.get("photo");
+      if (photo instanceof File && photo.size > 0) {
+        setUploadStatus("Uploading…");
+        const uploadUrl = await createTeamPhotoUploadUrl(photo.type);
+        if (uploadUrl.error || !uploadUrl.path || !uploadUrl.token) {
+          setError(uploadUrl.error ?? "Couldn't prepare that photo for upload.");
+          setUploadStatus(null);
+          return;
+        }
+        const browserSupabase = createClient();
+        const { error: putError } = await browserSupabase.storage
+          .from("team-photos")
+          .uploadToSignedUrl(uploadUrl.path, uploadUrl.token, photo);
+        if (putError) {
+          setError(`Couldn't upload the photo: ${putError.message}`);
+          setUploadStatus(null);
+          return;
+        }
+        formData.set("photo_path", uploadUrl.path);
+      }
+      formData.delete("photo");
+      setUploadStatus(null);
+
       const result = editing
         ? await updateTeamMember(editing.id, formData)
         : await createTeamMember(formData);
@@ -108,7 +141,7 @@ export default function TeamMemberForm({
           unoptimized
         />
       )}
-      <input id="tm-photo" name="photo" type="file" accept="image/jpeg,image/png,image/webp" />
+      <input id="tm-photo" name="photo" type="file" accept={PHOTO_ACCEPT} />
 
       <label className="f" htmlFor="tm-order">
         Display Order (within category)
@@ -158,7 +191,7 @@ export default function TeamMemberForm({
 
       <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
         <button className="btn btn-primary" disabled={pending}>
-          {pending ? "Saving…" : editing ? "Save changes" : "Add member"}
+          {uploadStatus ?? (pending ? "Saving…" : editing ? "Save changes" : "Add member")}
         </button>
         <button type="button" className="btn btn-ghost" onClick={onDone} disabled={pending}>
           Cancel

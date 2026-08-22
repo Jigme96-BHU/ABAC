@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { imageSizeFromBuffer } from "@/lib/image-size";
 import { stripe } from "@/lib/stripe";
 import { mailer, MAIL_FROM } from "@/lib/mail";
 import { corporatePaymentLinkEmail } from "@/lib/emails/corporate-payment-link";
@@ -956,29 +955,45 @@ export async function getBulkEmailCampaigns() {
 // Team Members — admin can manage leadership across categories
 // ---------------------------------------------------------------------------
 
-async function uploadTeamPhoto(
+/** Direct-to-storage upload, step 1 — same reasoning as
+ *  createStoryImageUploadUrl/createDocumentUploadUrl: routing the raw photo
+ *  through this action's own request body hits Next.js's 1MB default
+ *  server-action limit, which a real phone-camera photo routinely exceeds,
+ *  failing silently. The `team-photos` bucket's insert policy is
+ *  admin-gated (`bucket_id = 'team-photos' and public.is_admin()`), same
+ *  shape as story-videos'/documents' — that's evaluated against the
+ *  signed-in admin's session right here, when the URL is minted, not
+ *  against whatever session does the actual PUT. team_members has no
+ *  width/height columns to store, so unlike Stories there's no reason to
+ *  read image dimensions at all here, in the browser or otherwise. */
+export async function createTeamPhotoUploadUrl(
+  contentType: string
+): Promise<{ error: string | null; path?: string; token?: string }> {
+  const ext = EXT_BY_TYPE[contentType];
+  if (!ext) return { error: "Image must be a JPEG, PNG, WebP, GIF, HEIC/HEIF, or AVIF file." };
+
+  const supabase = await createClient();
+  const path = `team-photo-${crypto.randomUUID()}.${ext}`;
+  const { data, error } = await supabase.storage.from("team-photos").createSignedUploadUrl(path);
+  if (error) return { error: error.message };
+
+  return { error: null, path, token: data.token };
+}
+
+/** The photo is already in Storage by the time this runs (see
+ *  createTeamPhotoUploadUrl above) — this only resolves the path's public
+ *  URL, same "already uploaded, only resolve + record" shape as
+ *  readUploadedDocument. */
+function readUploadedTeamPhoto(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  file: File,
-  memberId: string,
-) {
-  const ext = EXT_BY_TYPE[file.type];
-  if (!ext) return { error: "Photo must be a JPEG, PNG, or WebP file." } as const;
-
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const size = imageSizeFromBuffer(buffer);
-  if (!size) return { error: "Couldn't read that image file — try a different one." } as const;
-
-  const path = `${memberId}-${Date.now().toString(36)}.${ext}`;
-  const { error: uploadError } = await supabase.storage
-    .from("team-photos")
-    .upload(path, buffer, { contentType: file.type });
-  if (uploadError) return { error: uploadError.message } as const;
-
+  formData: FormData
+): { photo_path: string } | undefined {
+  const path = String(formData.get("photo_path") ?? "").trim();
+  if (!path) return undefined;
   const {
     data: { publicUrl },
   } = supabase.storage.from("team-photos").getPublicUrl(path);
-
-  return { error: null, url: publicUrl } as const;
+  return { photo_path: publicUrl };
 }
 
 function readTeamMemberFields(formData: FormData) {
@@ -1000,17 +1015,7 @@ function readTeamMemberFields(formData: FormData) {
 export async function createTeamMember(formData: FormData) {
   const supabase = await createClient();
   const fields = readTeamMemberFields(formData);
-
-  // Generate temporary ID for photo naming
-  const tempId = crypto.randomUUID();
-
-  const photo = formData.get("photo");
-  let photoData: { photo_path: string } | undefined;
-  if (photo instanceof File && photo.size > 0) {
-    const result = await uploadTeamPhoto(supabase, photo, tempId);
-    if (result.error !== null) return { error: result.error };
-    photoData = { photo_path: result.url };
-  }
+  const photoData = readUploadedTeamPhoto(supabase, formData);
 
   const { error } = await supabase.from("team_members").insert({ ...fields, ...photoData });
   if (error) return { error: error.message };
@@ -1022,14 +1027,7 @@ export async function createTeamMember(formData: FormData) {
 export async function updateTeamMember(id: string, formData: FormData) {
   const supabase = await createClient();
   const fields = readTeamMemberFields(formData);
-
-  const photo = formData.get("photo");
-  let photoData: { photo_path: string } | undefined;
-  if (photo instanceof File && photo.size > 0) {
-    const result = await uploadTeamPhoto(supabase, photo, id);
-    if (result.error !== null) return { error: result.error };
-    photoData = { photo_path: result.url };
-  }
+  const photoData = readUploadedTeamPhoto(supabase, formData);
 
   const { error } = await supabase.from("team_members").update({ ...fields, ...photoData }).eq("id", id);
   if (error) return { error: error.message };
