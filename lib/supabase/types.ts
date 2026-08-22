@@ -143,8 +143,8 @@ export type ServiceRequestRow = {
   fee_cents: number;
   status: "pending" | "active";
   stripe_checkout_session_id: string | null;
-  rendered_document_path: string | null; // private Storage path — the finished letter, admin-uploaded (0026_service_request_fulfillment.sql)
-  fulfilled_at: string | null; // set when the rendered document was emailed to the requester
+  action_status: "pending" | "done" | "declined"; // committee workflow state — distinct from `status` (payment), 0026_service_request_action_tracking.sql
+  admin_comment: string | null;
   created_at: string;
   updated_at: string;
 };

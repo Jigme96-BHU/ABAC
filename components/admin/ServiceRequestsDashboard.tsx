@@ -6,12 +6,12 @@ import {
   getServiceDocumentUrl,
   deleteServiceRequest,
   searchServiceRequests,
-  createRenderedDocumentUploadUrl,
-  sendServiceDocument,
-  RENDERED_DOCUMENT_MAX_BYTES,
+  updateServiceAction,
+  getServiceRequestsForExport,
+  type ServiceRequestExportFilter,
 } from "@/app/admin/actions";
-import { createClient } from "@/lib/supabase/client";
-import { serviceTypeLabel } from "@/lib/service-types";
+import { downloadCsv, type CsvColumn } from "@/lib/csv";
+import { serviceTypeLabel, SERVICE_TYPES } from "@/lib/service-types";
 import type { ServiceRequestRow } from "@/lib/supabase/types";
 
 const DOCUMENT_FIELDS: { key: keyof ServiceRequestRow; label: string }[] = [
@@ -21,21 +21,49 @@ const DOCUMENT_FIELDS: { key: keyof ServiceRequestRow; label: string }[] = [
   { key: "proof_of_residency_path", label: "Proof of residency" },
 ];
 
+const ACTION_LABEL: Record<ServiceRequestRow["action_status"], string> = {
+  pending: "Pending",
+  done: "Done",
+  declined: "Declined",
+};
+
+const EXPORT_COLUMNS: CsvColumn<ServiceRequestRow>[] = [
+  { header: "Requester", value: (r) => r.requester_name },
+  { header: "Email", value: (r) => r.email },
+  { header: "Phone", value: (r) => r.phone },
+  { header: "Service", value: (r) => serviceTypeLabel(r.service_type) },
+  { header: "Payment status", value: (r) => (r.status === "active" ? "Paid" : "Pending payment") },
+  { header: "Fee (cents)", value: (r) => String(r.fee_cents) },
+  { header: "Member rate used", value: (r) => (r.is_member ? "Yes" : "No") },
+  { header: "Action taken", value: (r) => ACTION_LABEL[r.action_status] },
+  { header: "Comment", value: (r) => r.admin_comment ?? "" },
+  { header: "Submitted", value: (r) => new Date(r.created_at).toLocaleDateString("en-AU") },
+];
+
 export default function ServiceRequestsDashboard({ requests }: { requests: ServiceRequestRow[] }) {
-  const [view, setView] = useState<"all" | "search">("all");
+  const [view, setView] = useState<"all" | "search" | "export">("all");
 
   return (
     <div>
-      <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+      <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
         <button className={view === "all" ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"} onClick={() => setView("all")}>
           All requests
         </button>
         <button className={view === "search" ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"} onClick={() => setView("search")}>
           Search
         </button>
+        <button className={view === "export" ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"} onClick={() => setView("export")}>
+          Bulk export
+        </button>
       </div>
 
-      {view === "all" ? <RequestsTable requests={requests} /> : <ServiceSearchView />}
+      {view === "all" ? (
+        <RequestsTable requests={requests} />
+      ) : view === "search" ? (
+        <ServiceSearchView />
+      ) : (
+        <ServiceExportView />
+      )}
     </div>
   );
 }
@@ -127,7 +155,7 @@ function RequestsTable({ requests }: { requests: ServiceRequestRow[] }) {
           <th>Documents</th>
           <th>Status</th>
           <th>Submitted</th>
-          <th>Send document</th>
+          <th>Action Taken</th>
           <th></th>
         </tr>
       </thead>
@@ -161,12 +189,8 @@ function RequestsTable({ requests }: { requests: ServiceRequestRow[] }) {
             </td>
             <td>{r.status === "active" ? "Paid" : "Pending payment"}</td>
             <td>{new Date(r.created_at).toLocaleDateString("en-AU")}</td>
-            <td style={{ minWidth: 220 }}>
-              {r.status === "active" ? (
-                <SendDocumentCell request={r} onSent={() => router.refresh()} />
-              ) : (
-                <span style={{ fontSize: 12, color: "var(--ink-soft)" }}>Awaiting payment</span>
-              )}
+            <td style={{ minWidth: 200 }}>
+              <ActionTakenCell request={r} onChanged={() => router.refresh()} />
             </td>
             <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
               <button className="btn btn-ghost btn-sm" onClick={() => handleDelete(r)} disabled={pending}>
@@ -180,106 +204,164 @@ function RequestsTable({ requests }: { requests: ServiceRequestRow[] }) {
   );
 }
 
-/** Uploads straight to Supabase Storage via a signed URL rather than
- *  through this form's own submit — routing a real scanned/signed letter
- *  through a Next.js server action's request body hits its 1MB default
- *  limit and fails silently, which is exactly what made the previous
- *  version of this feature unreliable. No file-type restriction: "any
- *  document file" is the point, so whatever extension the admin's file
- *  actually has is what gets used. */
-function SendDocumentCell({ request, onSent }: { request: ServiceRequestRow; onSent: () => void }) {
-  const [writeEmailOpen, setWriteEmailOpen] = useState(false);
-  const [customMessage, setCustomMessage] = useState("");
-  const [status, setStatus] = useState<string | null>(null);
+/** Committee workflow state — separate from the payment `status` column
+ *  shown in the "Status" column to its left. Clicking a status button
+ *  saves it together with whatever's currently in the comment box, so
+ *  noting a reason and setting the status is one action; "Save comment"
+ *  lets the admin update just the note without changing the status. */
+function ActionTakenCell({ request, onChanged }: { request: ServiceRequestRow; onChanged: () => void }) {
+  const [comment, setComment] = useState(request.admin_comment ?? "");
+  const [savingStatus, setSavingStatus] = useState<ServiceRequestRow["action_status"] | null>(null);
+  const [savingComment, setSavingComment] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  function submit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const form = e.currentTarget;
-    const formData = new FormData(form);
-    const file = formData.get("document");
+  function setStatus(actionStatus: ServiceRequestRow["action_status"]) {
     setError(null);
-    setStatus(null);
-
-    if (!(file instanceof File) || file.size === 0) {
-      setError("Please choose a file to send.");
-      return;
-    }
-    if (file.size > RENDERED_DOCUMENT_MAX_BYTES) {
-      setError("That file is over 10MB — please choose a smaller one.");
-      return;
-    }
-
+    setSavingStatus(actionStatus);
     startTransition(async () => {
-      setStatus("Uploading…");
-      const uploadUrl = await createRenderedDocumentUploadUrl(request.id, file.name);
-      if (uploadUrl.error || !uploadUrl.path || !uploadUrl.token) {
-        setError(uploadUrl.error ?? "Couldn't prepare that file for upload.");
-        setStatus(null);
-        return;
-      }
-
-      const browserSupabase = createClient();
-      const { error: putError } = await browserSupabase.storage
-        .from("service-documents")
-        .uploadToSignedUrl(uploadUrl.path, uploadUrl.token, file);
-      if (putError) {
-        setError(`Couldn't upload the file: ${putError.message}`);
-        setStatus(null);
-        return;
-      }
-
-      setStatus("Sending email…");
-      const message = writeEmailOpen ? customMessage.trim() || undefined : undefined;
-      const result = await sendServiceDocument(request.id, uploadUrl.path, file.name, message);
-      setStatus(null);
+      const result = await updateServiceAction(request.id, actionStatus, comment);
+      setSavingStatus(null);
       if (result.error) {
         setError(result.error);
         return;
       }
-      form.reset();
-      setCustomMessage("");
-      setWriteEmailOpen(false);
-      onSent();
+      onChanged();
+    });
+  }
+
+  function saveComment() {
+    setError(null);
+    setSavingComment(true);
+    startTransition(async () => {
+      const result = await updateServiceAction(request.id, request.action_status, comment);
+      setSavingComment(false);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      onChanged();
+    });
+  }
+
+  const statusButton = (value: ServiceRequestRow["action_status"], label: string) => (
+    <button
+      key={value}
+      type="button"
+      className={request.action_status === value ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"}
+      style={{ padding: "4px 10px", fontSize: 12 }}
+      onClick={() => setStatus(value)}
+      disabled={pending}
+    >
+      {pending && savingStatus === value ? "Saving…" : label}
+    </button>
+  );
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
+        {statusButton("done", "Done")}
+        {statusButton("pending", "Pending")}
+        {statusButton("declined", "Declined")}
+      </div>
+
+      <textarea
+        value={comment}
+        onChange={(e) => setComment(e.target.value)}
+        placeholder="Comment (optional)…"
+        rows={2}
+        style={{ fontSize: 12, width: "100%", maxWidth: 200, marginBottom: 4 }}
+      />
+      <button className="btn btn-ghost btn-sm" style={{ padding: "3px 8px", fontSize: 11 }} onClick={saveComment} disabled={pending}>
+        {pending && savingComment ? "Saving…" : "Save comment"}
+      </button>
+
+      {error && <div style={{ fontSize: 11, color: "#c33", marginTop: 4 }}>{error}</div>}
+    </div>
+  );
+}
+
+function ServiceExportView() {
+  const [filter, setFilter] = useState<ServiceRequestExportFilter>({});
+  const [pending, startTransition] = useTransition();
+  const [message, setMessage] = useState<string | null>(null);
+
+  function toggleActionStatus(status: "pending" | "done" | "declined") {
+    setFilter((f) => {
+      const current = f.actionStatuses ?? [];
+      const next = current.includes(status) ? current.filter((s) => s !== status) : [...current, status];
+      return { ...f, actionStatuses: next.length > 0 ? next : undefined };
+    });
+  }
+
+  function toggleServiceType(type: "letter_of_residency" | "character_reference") {
+    setFilter((f) => {
+      const current = f.serviceTypes ?? [];
+      const next = current.includes(type) ? current.filter((t) => t !== type) : [...current, type];
+      return { ...f, serviceTypes: next.length > 0 ? next : undefined };
+    });
+  }
+
+  function runExport() {
+    setMessage(null);
+    startTransition(async () => {
+      const res = await getServiceRequestsForExport(filter);
+      if (res.error) {
+        setMessage(`Couldn't export: ${res.error}`);
+        return;
+      }
+      if (res.rows.length === 0) {
+        setMessage("No service requests match those filters.");
+        return;
+      }
+      downloadCsv(res.rows, EXPORT_COLUMNS, "abac-service-requests");
+      setMessage(`Exported ${res.rows.length} service requests.`);
     });
   }
 
   return (
-    <form onSubmit={submit}>
-      <input name="document" type="file" required style={{ fontSize: 12, marginBottom: 4, maxWidth: 200 }} />
-
-      <div style={{ marginBottom: writeEmailOpen ? 6 : 4 }}>
-        <button
-          type="button"
-          className="btn btn-ghost btn-sm"
-          style={{ padding: "3px 8px", fontSize: 11 }}
-          onClick={() => setWriteEmailOpen((o) => !o)}
-        >
-          {writeEmailOpen ? "Hide message" : "Write email"}
-        </button>
+    <div className="form-card" style={{ maxWidth: 480 }}>
+      <label className="f" style={{ marginTop: 0 }}>Action taken</label>
+      <div style={{ marginBottom: 4 }}>
+        {(["pending", "done", "declined"] as const).map((s) => (
+          <label key={s} style={{ display: "block", marginBottom: 4 }}>
+            <input type="checkbox" checked={filter.actionStatuses?.includes(s) ?? false} onChange={() => toggleActionStatus(s)} /> {ACTION_LABEL[s]}
+          </label>
+        ))}
       </div>
 
-      {writeEmailOpen && (
-        <textarea
-          value={customMessage}
-          onChange={(e) => setCustomMessage(e.target.value)}
-          placeholder="Optional note to include in the email…"
-          rows={3}
-          style={{ fontSize: 12, marginBottom: 6, maxWidth: 200, width: "100%" }}
+      <label className="f">Service type</label>
+      <div style={{ marginBottom: 4 }}>
+        {SERVICE_TYPES.map((s) => (
+          <label key={s.value} style={{ display: "block", marginBottom: 4 }}>
+            <input
+              type="checkbox"
+              checked={filter.serviceTypes?.includes(s.value) ?? false}
+              onChange={() => toggleServiceType(s.value)}
+            />{" "}
+            {s.label}
+          </label>
+        ))}
+      </div>
+
+      <label className="f">Submitted between</label>
+      <div className="two">
+        <input
+          type="date"
+          value={filter.dateRange?.start ?? ""}
+          onChange={(e) => setFilter((f) => ({ ...f, dateRange: { start: e.target.value, end: f.dateRange?.end ?? "" } }))}
         />
-      )}
+        <input
+          type="date"
+          value={filter.dateRange?.end ?? ""}
+          onChange={(e) => setFilter((f) => ({ ...f, dateRange: { start: f.dateRange?.start ?? "", end: e.target.value } }))}
+        />
+      </div>
 
-      <button className="btn btn-ghost btn-sm" disabled={pending}>
-        {status ?? (request.fulfilled_at ? "Resend" : "Send")}
+      <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={runExport} disabled={pending}>
+        {pending ? "Exporting…" : "Export CSV"}
       </button>
-
-      {request.fulfilled_at && !status && (
-        <div style={{ fontSize: 11, color: "var(--ink-soft)", marginTop: 4 }}>
-          Sent {new Date(request.fulfilled_at).toLocaleDateString("en-AU")}
-        </div>
-      )}
-      {error && <div style={{ fontSize: 11, color: "#c33", marginTop: 4 }}>{error}</div>}
-    </form>
+      {message && <p style={{ marginTop: 10, fontSize: 13, color: "var(--ink-soft)" }}>{message}</p>}
+    </div>
   );
 }

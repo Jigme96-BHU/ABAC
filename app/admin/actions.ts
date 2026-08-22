@@ -8,7 +8,6 @@ import { mailer, MAIL_FROM } from "@/lib/mail";
 import { corporatePaymentLinkEmail } from "@/lib/emails/corporate-payment-link";
 import { corporateRejectedEmail } from "@/lib/emails/corporate-rejected";
 import { welcomeEmail } from "@/lib/emails/welcome";
-import { serviceDocumentReadyEmail } from "@/lib/emails/service-document-ready";
 import { formatMemberNo, formatDate } from "@/lib/member-number";
 import { CORPORATE_TIER_FEES_CENTS, corporateTierLabel, type CorporateTier } from "@/lib/corporate-tiers";
 import { serviceTypeLabel } from "@/lib/service-types";
@@ -653,96 +652,49 @@ export async function searchServiceRequests(
   return { error: null, results };
 }
 
-/** 10MB — generous for a scanned/signed letter, while staying safely under
- *  Gmail's ~25MB send limit once SMTP's base64 encoding overhead (~33%) is
- *  factored in. Enforced client-side (ServiceRequestsDashboard.tsx) before
- *  upload starts, and re-checked here since a tampered client could
- *  otherwise skip the check. */
-export const RENDERED_DOCUMENT_MAX_BYTES = 10 * 1024 * 1024;
-
-/** Direct-to-storage upload, step 1 — same reason as
- *  createServiceDocumentUploadUrl in app/services/actions.ts: routing the
- *  file through this server action's own request body is capped at 1MB by
- *  Next.js by default, which a real scanned/signed letter routinely
- *  exceeds. A signed upload URL lets the browser PUT the file straight to
- *  Supabase Storage instead. No MIME allowlist here — "any document file"
- *  is the point, so the extension comes from whatever the admin actually
- *  selected rather than a fixed PDF/DOC/DOCX map. */
-export async function createRenderedDocumentUploadUrl(
-  requestId: string,
-  filename: string
-): Promise<{ error: string | null; path?: string; token?: string }> {
-  const dot = filename.lastIndexOf(".");
-  const ext = dot > 0 ? filename.slice(dot + 1).toLowerCase().replace(/[^a-z0-9]/g, "") : "";
-  const path = `${requestId}-rendered-${Date.now().toString(36)}${ext ? `.${ext}` : ""}`;
-
-  const supabase = await createClient();
-  const { data, error } = await supabase.storage.from("service-documents").createSignedUploadUrl(path);
-  if (error) return { error: error.message };
-
-  return { error: null, path, token: data.token };
-}
-
-/** Direct-to-storage upload, step 2 — the file is already in Storage by the
- *  time this runs (see createRenderedDocumentUploadUrl above); this
- *  downloads it back server-side to attach to the email (service-documents
- *  is private, so a link would need to be signed and would eventually
- *  expire — an attachment doesn't have that problem), then marks the
- *  request fulfilled. Doesn't touch `status`: paid and fulfilled are
- *  different things, and a request can be paid while still awaiting
- *  fulfilment. Re-running this (e.g. to send a corrected version) just
- *  overwrites rendered_document_path and re-sends. */
-export async function sendServiceDocument(
+/** "Action Taken" — the committee's workflow state on a request (have they
+ *  actually written the letter / declined it / still working on it),
+ *  tracked separately from `status` (whether payment cleared). A request
+ *  can be paid and still `pending` here, or (rarely) declined after
+ *  payment — that's a real state the committee needs to record, not
+ *  something this function judges. The comment is saved alongside the
+ *  status change in one call so noting a reason and setting the status is
+ *  a single action, not two. */
+export async function updateServiceAction(
   id: string,
-  path: string,
-  filename: string,
-  customMessage?: string
+  actionStatus: "pending" | "done" | "declined",
+  comment: string | null
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
-
-  const { data: request, error: fetchError } = await supabase
+  const { error } = await supabase
     .from("service_requests")
-    .select("service_type, requester_name, email")
-    .eq("id", id)
-    .single();
-  if (fetchError) return { error: fetchError.message };
-
-  const { data: downloaded, error: downloadError } = await supabase.storage
-    .from("service-documents")
-    .download(path);
-  if (downloadError) return { error: downloadError.message };
-  if (downloaded.size > RENDERED_DOCUMENT_MAX_BYTES) {
-    return { error: "That file is over 10MB — please choose a smaller one." };
-  }
-  const buffer = Buffer.from(await downloaded.arrayBuffer());
-
-  const now = new Date().toISOString();
-  const { error: updateError } = await supabase
-    .from("service_requests")
-    .update({ rendered_document_path: path, fulfilled_at: now })
+    .update({ action_status: actionStatus, admin_comment: comment?.trim() || null })
     .eq("id", id);
-  if (updateError) return { error: updateError.message };
-
-  try {
-    const { subject, text, html } = serviceDocumentReadyEmail({
-      requesterName: request.requester_name,
-      serviceLabel: serviceTypeLabel(request.service_type),
-      customMessage,
-    });
-    await mailer.sendMail({
-      from: MAIL_FROM,
-      to: request.email,
-      subject,
-      text,
-      html,
-      attachments: [{ filename: filename || "document", content: buffer }],
-    });
-  } catch (err) {
-    return { error: err instanceof Error ? `Uploaded, but the email failed to send: ${err.message}` : "Uploaded, but the email failed to send." };
-  }
-
+  if (error) return { error: error.message };
   revalidatePath("/admin");
   return { error: null };
+}
+
+export type ServiceRequestExportFilter = {
+  actionStatuses?: ("pending" | "done" | "declined")[];
+  serviceTypes?: ("letter_of_residency" | "character_reference")[];
+  dateRange?: { start: string; end: string };
+};
+
+export async function getServiceRequestsForExport(
+  filter: ServiceRequestExportFilter
+): Promise<{ error: string | null; rows: ServiceRequestRow[] }> {
+  const supabase = await createClient();
+  let query = supabase.from("service_requests").select("*").order("created_at", { ascending: false });
+
+  if (filter.actionStatuses?.length) query = query.in("action_status", filter.actionStatuses);
+  if (filter.serviceTypes?.length) query = query.in("service_type", filter.serviceTypes);
+  if (filter.dateRange?.start) query = query.gte("created_at", filter.dateRange.start);
+  if (filter.dateRange?.end) query = query.lte("created_at", filter.dateRange.end);
+
+  const { data, error } = await query.returns<ServiceRequestRow[]>();
+  if (error) return { error: error.message, rows: [] };
+  return { error: null, rows: data ?? [] };
 }
 
 // ---------------------------------------------------------------------------
