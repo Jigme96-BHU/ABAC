@@ -1,7 +1,12 @@
 "use client";
 
 import { useState, useTransition, type FormEvent } from "react";
-import { submitCorporateApplication } from "@/app/join/actions";
+import {
+  submitCorporateApplication,
+  createCorporateCertificateUploadUrl,
+  createCorporateLogoUploadUrl,
+} from "@/app/join/actions";
+import { createClient } from "@/lib/supabase/client";
 import { CORPORATE_TIERS, type CorporateTier } from "@/lib/corporate-tiers";
 
 /** Fixed positions rather than Math.random(): the server and client must
@@ -60,6 +65,7 @@ const TIER_BENEFITS: Record<CorporateTier, string[]> = {
 export default function CorporateForm() {
   const [tier, setTier] = useState<CorporateTier>("gold");
   const [error, setError] = useState<string | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [sent, setSent] = useState(false);
 
@@ -68,7 +74,58 @@ export default function CorporateForm() {
     const form = e.currentTarget;
     const formData = new FormData(form);
     setError(null);
+    setUploadStatus(null);
     startTransition(async () => {
+      // Both files go straight to Storage from the browser — a real
+      // scanned certificate or a high-res logo can exceed Next.js's 1MB
+      // default server-action request-body limit, which this form
+      // (having no try/catch around the action call) previously failed on
+      // silently: no error shown, nothing submitted.
+      const browserSupabase = createClient();
+
+      const certificate = formData.get("business_certificate");
+      if (certificate instanceof File && certificate.size > 0) {
+        setUploadStatus("Uploading certificate…");
+        const uploadUrl = await createCorporateCertificateUploadUrl(certificate.type);
+        if (uploadUrl.error || !uploadUrl.path || !uploadUrl.token) {
+          setError(uploadUrl.error ?? "Couldn't prepare the certificate for upload.");
+          setUploadStatus(null);
+          return;
+        }
+        const { error: putError } = await browserSupabase.storage
+          .from("corporate-documents")
+          .uploadToSignedUrl(uploadUrl.path, uploadUrl.token, certificate);
+        if (putError) {
+          setError(`Couldn't upload the certificate: ${putError.message}`);
+          setUploadStatus(null);
+          return;
+        }
+        formData.set("certificate_path", uploadUrl.path);
+      }
+      formData.delete("business_certificate");
+
+      const logo = formData.get("logo");
+      if (logo instanceof File && logo.size > 0) {
+        setUploadStatus("Uploading logo…");
+        const uploadUrl = await createCorporateLogoUploadUrl(logo.type);
+        if (uploadUrl.error || !uploadUrl.path || !uploadUrl.token) {
+          setError(uploadUrl.error ?? "Couldn't prepare the logo for upload.");
+          setUploadStatus(null);
+          return;
+        }
+        const { error: putError } = await browserSupabase.storage
+          .from("corporate-logos")
+          .uploadToSignedUrl(uploadUrl.path, uploadUrl.token, logo);
+        if (putError) {
+          setError(`Couldn't upload the logo: ${putError.message}`);
+          setUploadStatus(null);
+          return;
+        }
+        formData.set("logo_path", uploadUrl.path);
+      }
+      formData.delete("logo");
+      setUploadStatus(null);
+
       const result = await submitCorporateApplication(formData);
       if (result.ok) {
         setSent(true);
@@ -235,7 +292,7 @@ export default function CorporateForm() {
         )}
 
         <button className="btn btn-primary" style={{ width: "100%", marginTop: 8 }} disabled={pending}>
-          {pending ? "Please wait…" : "Submit corporate application"}
+          {uploadStatus ?? (pending ? "Please wait…" : "Submit corporate application")}
         </button>
         <p style={{ fontSize: 12, color: "var(--ink-soft)", marginTop: 8, textAlign: "center" }}>
           Applications are reviewed by the committee within 3 working days. You&apos;ll get a

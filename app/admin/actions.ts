@@ -11,7 +11,7 @@ import { welcomeEmail } from "@/lib/emails/welcome";
 import { formatMemberNo, formatDate } from "@/lib/member-number";
 import { CORPORATE_TIER_FEES_CENTS, corporateTierLabel, type CorporateTier } from "@/lib/corporate-tiers";
 import { serviceTypeLabel } from "@/lib/service-types";
-import type { MemberRow, ServiceRequestRow, CorporateMemberRow } from "@/lib/supabase/types";
+import type { MemberRow, ServiceRequestRow, CorporateMemberRow, VolunteerRow } from "@/lib/supabase/types";
 
 export type EventInput = {
   title: string;
@@ -476,6 +476,44 @@ export async function deleteVolunteer(id: string) {
   return { error: null };
 }
 
+/** Same parallel-lookups-merged-by-id shape used for Members/Corporate
+ *  search — see searchMembers's doc comment for why a single `.or()`
+ *  filter string is worth avoiding here too. */
+export async function searchVolunteers(query: string): Promise<{ error: string | null; results: VolunteerRow[] }> {
+  const q = query.trim();
+  if (!q) return { error: null, results: [] };
+
+  const supabase = await createClient();
+  const escaped = q.replace(/[%_]/g, "\\$&");
+  const digitsOnly = q.replace(/\D/g, "");
+
+  const lookups = [
+    supabase.from("volunteers").select("*").ilike("name", `%${escaped}%`).limit(50).returns<VolunteerRow[]>(),
+    supabase.from("volunteers").select("*").ilike("email", `%${escaped}%`).limit(50).returns<VolunteerRow[]>(),
+  ];
+  if (digitsOnly) {
+    lookups.push(
+      supabase.from("volunteers").select("*").ilike("cid", `%${digitsOnly}%`).limit(50).returns<VolunteerRow[]>(),
+      supabase.from("volunteers").select("*").ilike("phone", `%${digitsOnly}%`).limit(50).returns<VolunteerRow[]>()
+    );
+  }
+
+  const responses = await Promise.all(lookups);
+  const failed = responses.find((r) => r.error);
+  if (failed?.error) return { error: failed.error.message, results: [] };
+
+  const merged = new Map<string, VolunteerRow>();
+  for (const r of responses) {
+    for (const row of r.data ?? []) merged.set(row.id, row);
+  }
+
+  const results = [...merged.values()]
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .slice(0, 50);
+
+  return { error: null, results };
+}
+
 // ---------------------------------------------------------------------------
 // Corporate Membership — applications are public (see app/join/actions.ts's
 // submitCorporateApplication), but approval, payment-link generation, and
@@ -581,22 +619,29 @@ export async function rejectCorporateMember(id: string) {
   return { error: null };
 }
 
-export async function uploadCorporateLogo(id: string, formData: FormData) {
-  const supabase = await createClient();
-  const file = formData.get("logo");
-  if (!(file instanceof File) || file.size === 0) {
-    return { error: "Please choose a logo file to upload." };
-  }
-  const ext = CORPORATE_LOGO_EXT_BY_TYPE[file.type];
+/** Direct-to-storage upload, step 1 — a real logo file (a high-res PNG
+ *  export) can exceed Next.js's 1MB default server-action request-body
+ *  limit, same failure mode already fixed for story photos, documents, and
+ *  the public corporate application's own logo/certificate uploads. */
+export async function createAdminCorporateLogoUploadUrl(
+  contentType: string
+): Promise<{ error: string | null; path?: string; token?: string }> {
+  const ext = CORPORATE_LOGO_EXT_BY_TYPE[contentType];
   if (!ext) return { error: "Logo must be a JPEG, PNG, WebP, or SVG file." };
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const path = `corporate-${id}-${Date.now().toString(36)}.${ext}`;
-  const { error: uploadError } = await supabase.storage
-    .from("corporate-logos")
-    .upload(path, buffer, { contentType: file.type });
-  if (uploadError) return { error: uploadError.message };
+  const supabase = await createClient();
+  const path = `corporate-${crypto.randomUUID()}.${ext}`;
+  const { data, error } = await supabase.storage.from("corporate-logos").createSignedUploadUrl(path);
+  if (error) return { error: error.message };
 
+  return { error: null, path, token: data.token };
+}
+
+/** The file is already in Storage by the time this runs (see
+ *  createAdminCorporateLogoUploadUrl above) — this only resolves the
+ *  public URL and records it. */
+export async function recordCorporateLogo(id: string, path: string) {
+  const supabase = await createClient();
   const {
     data: { publicUrl },
   } = supabase.storage.from("corporate-logos").getPublicUrl(path);
@@ -1184,19 +1229,36 @@ export type MembersExportFilter = {
   membershipType?: "single" | "family";
 };
 
+/** A member's DB `status` only flips from 'active' to 'expired' once a day,
+ *  when the expiry-reminder cron calls mark_member_expiry_reminder_sent
+ *  (0008_membership_expiry_reminders.sql) — so a membership that expired
+ *  earlier today can still read `status = 'active'` for up to 24 hours.
+ *  MembersDashboard.tsx's statusLabel() already cross-checks expires_at
+ *  for on-screen display; this applies the same rule to "Active only" /
+ *  "Inactive only" so the export can't disagree with what the admin just
+ *  saw in the search results for the same member. */
+function isEffectivelyActive(m: MemberRow): boolean {
+  if (m.status !== "active") return false;
+  if (m.expires_at && new Date(m.expires_at) < new Date()) return false;
+  return true;
+}
+
 export async function getMembersForExport(filter: MembersExportFilter): Promise<{ error: string | null; rows: MemberRow[] }> {
   const supabase = await createClient();
   let query = supabase.from("members").select("*").order("created_at", { ascending: false });
 
   if (filter.dateRange?.start) query = query.gte("created_at", filter.dateRange.start);
   if (filter.dateRange?.end) query = query.lte("created_at", filter.dateRange.end);
-  if (filter.status === "active") query = query.eq("status", "active");
-  if (filter.status === "inactive") query = query.neq("status", "active");
   if (filter.membershipType) query = query.eq("membership_type", filter.membershipType);
 
   const { data, error } = await query.returns<MemberRow[]>();
   if (error) return { error: error.message, rows: [] };
-  return { error: null, rows: data ?? [] };
+
+  let rows = data ?? [];
+  if (filter.status === "active") rows = rows.filter(isEffectivelyActive);
+  if (filter.status === "inactive") rows = rows.filter((m) => !isEffectivelyActive(m));
+
+  return { error: null, rows };
 }
 
 // ---------------------------------------------------------------------------
@@ -1205,21 +1267,37 @@ export async function getMembersForExport(filter: MembersExportFilter): Promise<
 // extend the same tab with the same admin-only access model.
 // ---------------------------------------------------------------------------
 
+/** Parallel per-field lookups merged by id, same shape as searchMembers —
+ *  a single `.or()` filter string is what silently broke email search
+ *  there (a query containing a digit skipped the name/email branch
+ *  entirely) and is separately fragile here too: a business name or ABN
+ *  containing a comma would prematurely split the `.or()` DSL into extra,
+ *  malformed clauses. Four independent ilike queries have no such failure
+ *  mode regardless of what characters the query contains. */
 export async function searchCorporateMembers(query: string): Promise<{ error: string | null; results: CorporateMemberRow[] }> {
   const q = query.trim();
   if (!q) return { error: null, results: [] };
   const escaped = q.replace(/[%_]/g, "\\$&");
 
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("corporate_members")
-    .select("*")
-    .or(`business_name.ilike.%${escaped}%,contact_name.ilike.%${escaped}%,email.ilike.%${escaped}%,abn.ilike.%${escaped}%`)
-    .order("created_at", { ascending: false })
-    .limit(50)
-    .returns<CorporateMemberRow[]>();
-  if (error) return { error: error.message, results: [] };
-  return { error: null, results: data ?? [] };
+  const lookups = (["business_name", "contact_name", "email", "abn"] as const).map((column) =>
+    supabase.from("corporate_members").select("*").ilike(column, `%${escaped}%`).limit(50).returns<CorporateMemberRow[]>()
+  );
+
+  const responses = await Promise.all(lookups);
+  const failed = responses.find((r) => r.error);
+  if (failed?.error) return { error: failed.error.message, results: [] };
+
+  const merged = new Map<string, CorporateMemberRow>();
+  for (const r of responses) {
+    for (const row of r.data ?? []) merged.set(row.id, row);
+  }
+
+  const results = [...merged.values()]
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .slice(0, 50);
+
+  return { error: null, results };
 }
 
 /** Backfills a sponsor who's already agreed to support ABAC offline (e.g.
