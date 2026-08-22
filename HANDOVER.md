@@ -317,6 +317,15 @@ The site must not replace the live WordPress one until all of these are done.
         emailed; an adult volunteer got no confirmation of any kind).
       - Added a search bar to the Volunteers tab, matching
         Members/Corporate/Services.
+- [ ] **Team Members photo upload fix (2026-08-22, no new migration).**
+      Same 1MB server-action body-size bug as everywhere else — a real
+      phone-camera team photo routinely exceeds it and failed silently.
+      Now uploads straight to Storage from the browser, same pattern as
+      Stories/Documents/Corporate. Also broadened accepted formats to
+      match Stories (GIF/HEIC/HEIF/AVIF, not just JPEG/PNG/WebP) and
+      dropped a redundant dimension-parsing check that made HEIC/HEIF
+      photos fail outright even when small — `team_members` has no
+      width/height columns, so nothing needs those dimensions.
 - [ ] **Set up the daily expiry-reminder cron job.** Add a production
       `CRON_SECRET`. `vercel.json` already schedules a daily production call
       to `/api/members/expiry-reminders`; Vercel sends
