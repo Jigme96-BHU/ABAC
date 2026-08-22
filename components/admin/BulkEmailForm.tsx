@@ -1,7 +1,15 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { sendBulkEmail, searchMembers, searchCorporateMembers, type BulkEmailFilter } from "@/app/admin/actions";
+import {
+  sendBulkEmail,
+  searchMembers,
+  searchCorporateMembers,
+  createEmailAttachmentUploadUrl,
+  EMAIL_ATTACHMENT_MAX_BYTES,
+  type BulkEmailFilter,
+} from "@/app/admin/actions";
+import { createClient } from "@/lib/supabase/client";
 
 type IndividualRecipient = { id: string; name: string; email: string };
 
@@ -13,10 +21,25 @@ export default function BulkEmailForm() {
     membershipTypes: ["single", "family"],
     includeInactive: false,
   });
-  const [attachments, setAttachments] = useState<string[]>([]);
+  const [attachmentFiles, setAttachmentFiles] = useState<File[]>([]);
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ error?: string; success?: string } | null>(null);
   const [showPreview, setShowPreview] = useState(false);
+
+  function addAttachmentFiles(files: FileList | null) {
+    if (!files) return;
+    const oversized = [...files].filter((f) => f.size > EMAIL_ATTACHMENT_MAX_BYTES);
+    if (oversized.length > 0) {
+      setResult({ error: `${oversized.map((f) => f.name).join(", ")} must each be under 5MB.` });
+      return;
+    }
+    setAttachmentFiles((prev) => [...prev, ...files]);
+  }
+
+  function removeAttachmentFile(index: number) {
+    setAttachmentFiles((prev) => prev.filter((_, i) => i !== index));
+  }
 
   const [individualQuery, setIndividualQuery] = useState("");
   const [individualResults, setIndividualResults] = useState<IndividualRecipient[]>([]);
@@ -103,11 +126,39 @@ export default function BulkEmailForm() {
     setLoading(true);
     setResult(null);
 
+    // Straight to Storage from the browser, same reason as every other
+    // upload in this project — routing files through the server action's
+    // own request body hits Next.js's 1MB default limit.
+    const uploaded: { path: string; filename: string }[] = [];
+    const browserSupabase = createClient();
+    for (let i = 0; i < attachmentFiles.length; i++) {
+      const file = attachmentFiles[i];
+      setUploadStatus(`Uploading ${file.name} (${i + 1}/${attachmentFiles.length})…`);
+      const uploadUrl = await createEmailAttachmentUploadUrl(file.type);
+      if (uploadUrl.error || !uploadUrl.path || !uploadUrl.token) {
+        setResult({ error: uploadUrl.error ?? `Couldn't prepare ${file.name} for upload.` });
+        setUploadStatus(null);
+        setLoading(false);
+        return;
+      }
+      const { error: putError } = await browserSupabase.storage
+        .from("email-attachments")
+        .uploadToSignedUrl(uploadUrl.path, uploadUrl.token, file);
+      if (putError) {
+        setResult({ error: `Couldn't upload ${file.name}: ${putError.message}` });
+        setUploadStatus(null);
+        setLoading(false);
+        return;
+      }
+      uploaded.push({ path: uploadUrl.path, filename: file.name });
+    }
+    setUploadStatus(null);
+
     const filterWithIndividuals: BulkEmailFilter = {
       ...filter,
       individualMemberIds: selectedIndividuals.map((p) => p.id),
     };
-    const res = await sendBulkEmail(subject, message, filterWithIndividuals, attachments);
+    const res = await sendBulkEmail(subject, message, filterWithIndividuals, uploaded);
 
     if (res.error) {
       setResult({ error: res.error });
@@ -116,7 +167,7 @@ export default function BulkEmailForm() {
       setSubject("");
       setMessage("");
       setFilter({ audience: filter.audience, membershipTypes: ["single", "family"], includeInactive: false });
-      setAttachments([]);
+      setAttachmentFiles([]);
       setSelectedIndividuals([]);
     }
     setLoading(false);
@@ -438,17 +489,50 @@ export default function BulkEmailForm() {
           Attachments (Optional)
         </label>
         <p style={{ fontSize: 12, color: "#666", margin: "0 0 8px" }}>
-          You can attach images and documents to this email
+          PDF, DOC/DOCX, or image files, up to 5MB each — uploaded once you click Send Email.
         </p>
         <input
           type="file"
           multiple
+          accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png,image/webp,image/gif"
+          onChange={(e) => addAttachmentFiles(e.target.files)}
           style={{
             padding: "8px 12px",
             border: "1px solid #e0e0e0",
             borderRadius: 4,
           }}
         />
+        {attachmentFiles.length > 0 && (
+          <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
+            {attachmentFiles.map((file, i) => (
+              <div
+                key={`${file.name}-${i}`}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "6px 10px",
+                  background: "#fff",
+                  border: "1px solid #e0e0e0",
+                  borderRadius: 4,
+                  fontSize: 13,
+                }}
+              >
+                <span>
+                  {file.name} <span style={{ color: "#999" }}>({(file.size / 1024).toFixed(0)} KB)</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => removeAttachmentFile(i)}
+                  aria-label={`Remove ${file.name}`}
+                  style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "#c33" }}
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {result && (
@@ -494,7 +578,7 @@ export default function BulkEmailForm() {
             opacity: loading ? 0.6 : 1,
           }}
         >
-          {loading ? "Sending..." : "Send Email"}
+          {uploadStatus ?? (loading ? "Sending..." : "Send Email")}
         </button>
       </div>
 

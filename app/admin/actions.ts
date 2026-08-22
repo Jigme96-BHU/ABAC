@@ -771,6 +771,41 @@ export async function getServiceRequestsForExport(
 // Bulk email campaigns — admin can send mass announcements to filtered members
 // ---------------------------------------------------------------------------
 
+const EMAIL_ATTACHMENT_EXT_BY_TYPE: Record<string, string> = {
+  "application/pdf": "pdf",
+  "application/msword": "doc",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/gif": "gif",
+};
+
+/** 5MB per file — an attachment here goes out to every filtered recipient,
+ *  potentially hundreds of people, so this stays tighter than the
+ *  single-recipient upload caps used elsewhere in this project. Enforced
+ *  client-side (BulkEmailForm.tsx) before upload starts, and re-checked
+ *  here since a tampered client could otherwise skip the check. */
+export const EMAIL_ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024;
+
+/** Direct-to-storage upload, step 1 — the email-attachments bucket's
+ *  insert policy is admin-gated (0028_email_attachments_admin_only.sql),
+ *  same shape as team-photos/documents: evaluated against the signed-in
+ *  admin's session right here, when the URL is minted. */
+export async function createEmailAttachmentUploadUrl(
+  contentType: string
+): Promise<{ error: string | null; path?: string; token?: string }> {
+  const ext = EMAIL_ATTACHMENT_EXT_BY_TYPE[contentType];
+  if (!ext) return { error: "Attachments must be a PDF, DOC, DOCX, JPG, PNG, WebP, or GIF file." };
+
+  const supabase = await createClient();
+  const path = `email-attachment-${crypto.randomUUID()}.${ext}`;
+  const { data, error } = await supabase.storage.from("email-attachments").createSignedUploadUrl(path);
+  if (error) return { error: error.message };
+
+  return { error: null, path, token: data.token };
+}
+
 export type BulkEmailFilter = {
   /** Which table this campaign draws recipients from — community members and
    *  corporate members are different tables with different fields, so a
@@ -881,7 +916,7 @@ export async function sendBulkEmail(
   subject: string,
   message: string,
   filter: BulkEmailFilter,
-  attachmentPaths: string[]
+  attachments: { path: string; filename: string }[]
 ) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -910,15 +945,29 @@ export async function sendBulkEmail(
       recipients.push(r);
     }
 
+    // Every attachment is already in Storage by the time this runs (see
+    // createEmailAttachmentUploadUrl) — downloaded once here and reused
+    // for every recipient, rather than re-downloading per send.
+    const mailAttachments: { filename: string; content: Buffer }[] = [];
+    for (const a of attachments) {
+      const { data: downloaded, error: downloadError } = await supabase.storage
+        .from("email-attachments")
+        .download(a.path);
+      if (downloadError) return { error: `Couldn't read attachment "${a.filename}": ${downloadError.message}` };
+      mailAttachments.push({ filename: a.filename, content: Buffer.from(await downloaded.arrayBuffer()) });
+    }
+
     const { bulkAnnouncementEmail } = await import("@/lib/emails/bulk-announcement");
-    const emailHtml = bulkAnnouncementEmail(subject, message);
+    const { text: emailText, html: emailHtml } = bulkAnnouncementEmail(subject, message);
 
     for (const recipient of recipients) {
       await mailer.sendMail({
         from: MAIL_FROM,
         to: recipient.email,
         subject,
+        text: emailText,
         html: emailHtml,
+        attachments: mailAttachments.length > 0 ? mailAttachments : undefined,
       });
     }
 
@@ -928,7 +977,7 @@ export async function sendBulkEmail(
       subject,
       message,
       recipient_filter: filter,
-      attachment_paths: attachmentPaths,
+      attachment_paths: attachments.map((a) => a.path),
       recipient_count: recipients.length,
     });
 
