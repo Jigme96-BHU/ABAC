@@ -49,12 +49,12 @@ export function welcomeEmail({
     ? `Your ABAC membership has been changed to ${isFamily ? "Family" : "Single"} and is active. Your renewal date is unchanged.`
     : isRenewal
       ? `Your ABAC ${membershipNoun} has been renewed and is now active.`
-      : `We are pleased to confirm that your ABAC ${membershipNoun} is now active.`;
+      : `Kuzu-Kangpo la, and a warm welcome to the ABAC family! We are pleased to confirm that your ABAC ${membershipNoun} is now active.`;
   const introHtml = isSwitch
     ? `Your ABAC membership has been changed to <strong>${isFamily ? "Family" : "Single"}</strong> and is active. Your renewal date is unchanged.`
     : isRenewal
       ? `Your ABAC ${membershipNoun} has been renewed and is now active.`
-      : `We are pleased to confirm that your ABAC ${membershipNoun} is now active.`;
+      : `<strong>Kuzu-Kangpo la, and a warm welcome to the ABAC family!</strong> We are pleased to confirm that your ABAC ${membershipNoun} is now active.`;
 
   const householdLines =
     household && household.length > 0
@@ -65,18 +65,36 @@ export function welcomeEmail({
       ? `\nDependents covered (under 18, no fee): ${dependents.map((d) => `${d.name} (${d.memberNo})`).join(", ")}.`
       : "";
 
+  // Only shown on first-time registration — a renewal or category switch is
+  // already a member who has read this once, so re-stating it every renewal
+  // would be repetitive rather than welcoming.
+  const significanceText =
+    !isRenewal && !isSwitch
+      ? `ABAC exists to support our fellow Bhutanese, foster meaningful relationships within our community, and sustain the activities that help our people here in Canberra. Together, our goal is to build an institution capable of meeting the real needs of Bhutanese individuals and families in this city, particularly our children, so that they may grow into individuals who are globally competent yet firmly rooted in their heritage. Achieving this is a collective responsibility, and it is on all of us to create the harmonious common space our community deserves. Your membership is a cornerstone of that effort, a real contribution toward the institution we hope to build for ourselves and for our children, and an example for the generations who will follow. We deeply appreciate your membership, and we look forward to building a stronger community together, for all Drukpas.\n\n`
+      : "";
+  const significanceHtml =
+    !isRenewal && !isSwitch
+      ? `<p style="margin:0 0 24px;color:${COLOR.ink};font-size:15px;line-height:1.6">
+      ABAC exists to support our fellow Bhutanese, foster meaningful relationships within our community, and sustain the activities that help our people here in Canberra. Together, our goal is to build an institution capable of meeting the real needs of Bhutanese individuals and families in this city, particularly our children, so that they may grow into individuals who are globally competent yet firmly rooted in their heritage. Achieving this is a collective responsibility, and it is on all of us to create the harmonious common space our community deserves. Your membership is a cornerstone of that effort, a real contribution toward the institution we hope to build for ourselves and for our children, and an example for the generations who will follow. We deeply appreciate your membership, and we look forward to building a stronger community together, for all Drukpas.
+    </p>`
+      : "";
+
   const text = `Dear ${name},
 
 ${introText}
 
+${significanceText}Here are your membership details:
+
 Membership number: ${memberNo}
-Membership fee: ${fee}
 Valid until: ${validUntil}
 ${householdLines}${dependentLines}
 
 Please retain this email as your membership confirmation and receipt. Your status can be
 checked at any time at https://bhutaneseincanberra.org.au/join using the email address and
-date of birth provided at registration.
+date of birth provided at registration. We also encourage you to explore the membership
+benefits available on our website: https://bhutaneseincanberra.org.au/#benefits
+
+Thank you and Pelden Drukpa!
 
 Tashi Delek,
 ABAC Committee
@@ -93,9 +111,10 @@ bhutancanberra@gmail.com`;
     <p style="margin:0 0 24px;color:${COLOR.ink};font-size:15px;line-height:1.6">
       ${introHtml}
     </p>
+    ${significanceHtml}
+    <p style="margin:0 0 12px;color:${COLOR.ink};font-size:14px;font-weight:600">Here are your membership details:</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid ${COLOR.line};border-radius:8px">
       ${row("Membership number", escapeHtml(memberNo))}
-      ${row("Membership fee", escapeHtml(fee))}
       ${row("Valid until", escapeHtml(validUntil), true)}
     </table>
     ${
@@ -116,7 +135,13 @@ bhutancanberra@gmail.com`;
       Please retain this email as your membership confirmation and receipt. Your status can be
       checked at any time on the
       <a href="https://bhutaneseincanberra.org.au/join" style="color:${COLOR.navy}">Join page</a>,
-      using the email address and date of birth provided at registration.
+      using the email address and date of birth provided at registration. We also encourage you
+      to explore the
+      <a href="https://bhutaneseincanberra.org.au/#benefits" style="color:${COLOR.navy}">membership benefits</a>
+      available on our website.
+    </p>
+    <p style="margin:0 0 20px;color:${COLOR.ink};font-size:14px;font-weight:600">
+      Thank you and Pelden Drukpa!
     </p>
     <p style="margin:0;color:${COLOR.ink};font-size:14px">
       Tashi Delek,<br />
