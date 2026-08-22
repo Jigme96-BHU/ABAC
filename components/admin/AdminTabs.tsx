@@ -19,6 +19,7 @@ import type {
   CorporateMemberRow,
   ServiceRequestRow,
   TeamMemberRow,
+  MemberRow,
 } from "@/lib/supabase/types";
 
 type Tab = "events" | "stories" | "documents" | "volunteers" | "members" | "corporate" | "services" | "email" | "team";
@@ -31,6 +32,8 @@ export default function AdminTabs({
   corporateMembers,
   serviceRequests,
   teamMembers,
+  recentMembers,
+  memberCount,
 }: {
   events: EventRow[];
   stories: StoryRow[];
@@ -39,6 +42,8 @@ export default function AdminTabs({
   corporateMembers: CorporateMemberRow[];
   serviceRequests: ServiceRequestRow[];
   teamMembers: TeamMemberRow[];
+  recentMembers: MemberRow[];
+  memberCount: number;
 }) {
   const [tab, setTab] = useState<Tab>("events");
   const pendingCorporate = corporateMembers.filter((m) => m.status === "pending").length;
@@ -74,7 +79,7 @@ export default function AdminTabs({
           className={tab === "members" ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"}
           onClick={() => setTab("members")}
         >
-          Members
+          Members ({memberCount})
         </button>
         <button
           className={tab === "corporate" ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"}
@@ -111,7 +116,7 @@ export default function AdminTabs({
       ) : tab === "volunteers" ? (
         <VolunteersDashboard volunteers={volunteers} />
       ) : tab === "members" ? (
-        <MembersDashboard />
+        <MembersDashboard recentMembers={recentMembers} memberCount={memberCount} />
       ) : tab === "corporate" ? (
         <CorporateDashboard corporateMembers={corporateMembers} />
       ) : tab === "services" ? (

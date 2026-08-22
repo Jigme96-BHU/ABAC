@@ -42,7 +42,13 @@ const EXPORT_COLUMNS: CsvColumn<MemberRow>[] = [
   { header: "Fee (cents)", value: (m) => String(m.fee_cents) },
 ];
 
-export default function MembersDashboard() {
+export default function MembersDashboard({
+  recentMembers,
+  memberCount,
+}: {
+  recentMembers: MemberRow[];
+  memberCount: number;
+}) {
   const [view, setView] = useState<"search" | "bulk">("search");
 
   return (
@@ -62,14 +68,25 @@ export default function MembersDashboard() {
         </button>
       </div>
 
-      {view === "search" ? <MemberSearchView /> : <MemberBulkExportView />}
+      {view === "search" ? (
+        <MemberSearchView recentMembers={recentMembers} memberCount={memberCount} />
+      ) : (
+        <MemberBulkExportView />
+      )}
     </div>
   );
 }
 
-function MemberSearchView() {
+function MemberSearchView({
+  recentMembers,
+  memberCount,
+}: {
+  recentMembers: MemberRow[];
+  memberCount: number;
+}) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<MemberRow[]>([]);
+  const [results, setResults] = useState<MemberRow[]>(recentMembers);
+  const [searched, setSearched] = useState(false);
   const [detail, setDetail] = useState<MemberDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [resendMessage, setResendMessage] = useState<string | null>(null);
@@ -79,6 +96,11 @@ function MemberSearchView() {
     e.preventDefault();
     setError(null);
     setDetail(null);
+    if (!query.trim()) {
+      setSearched(false);
+      setResults(recentMembers);
+      return;
+    }
     startTransition(async () => {
       try {
         const res = await searchMembers(query);
@@ -86,6 +108,7 @@ function MemberSearchView() {
           setError(res.error);
           return;
         }
+        setSearched(true);
         setResults(res.results);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Search failed — please try again.");
@@ -162,6 +185,12 @@ function MemberSearchView() {
           pending={pending}
         />
       ) : results.length > 0 ? (
+        <>
+          <p style={{ color: "var(--ink-soft)", fontSize: 13, marginBottom: 8 }}>
+            {searched
+              ? `${results.length} result${results.length === 1 ? "" : "s"}`
+              : `Most recent registrations (${results.length} of ${memberCount} total) — search above to find someone else.`}
+          </p>
         <table className="hist-table">
           <thead>
             <tr>
@@ -193,8 +222,13 @@ function MemberSearchView() {
             ))}
           </tbody>
         </table>
+        </>
       ) : (
-        <p style={{ color: "var(--ink-soft)" }}>Search by name, email, CID, or membership number.</p>
+        <p style={{ color: "var(--ink-soft)" }}>
+          {searched
+            ? "No members matched that search."
+            : "No members registered yet."}
+        </p>
       )}
     </div>
   );

@@ -11,6 +11,7 @@ import type {
   CorporateMemberRow,
   ServiceRequestRow,
   TeamMemberRow,
+  MemberRow,
 } from "@/lib/supabase/types";
 
 export const metadata: Metadata = {
@@ -78,6 +79,7 @@ export default async function AdminPage() {
     { data: corporateMembers },
     { data: serviceRequests },
     { data: teamMembers },
+    { data: members, count: memberCount },
   ] = await Promise.all([
     supabase.from("events").select("*").order("date", { ascending: true }).returns<EventRow[]>(),
     supabase.from("stories").select("*").order("date", { ascending: false }).returns<StoryRow[]>(),
@@ -107,6 +109,17 @@ export default async function AdminPage() {
       .order("category", { ascending: true })
       .order("display_order", { ascending: true })
       .returns<TeamMemberRow[]>(),
+    // Bounded to the most recent 50 — the Members tab is search-first (CID,
+    // DOB, and phone are sensitive, so unlike every other tab here it isn't
+    // meant to dump the whole PII-heavy register on load) but it still needs
+    // *some* default view, otherwise a brand-new registration looks "missing"
+    // until an admin thinks to search for it by name/email/CID/member no.
+    supabase
+      .from("members")
+      .select("*", { count: "exact" })
+      .order("created_at", { ascending: false })
+      .limit(50)
+      .returns<MemberRow[]>(),
   ]);
 
   return (
@@ -138,6 +151,8 @@ export default async function AdminPage() {
             corporateMembers={corporateMembers ?? []}
             serviceRequests={serviceRequests ?? []}
             teamMembers={teamMembers ?? []}
+            recentMembers={members ?? []}
+            memberCount={memberCount ?? members?.length ?? 0}
           />
         </div>
       </section>
