@@ -111,69 +111,96 @@ const VIDEO_EXT_BY_TYPE: Record<string, string> = {
   "video/quicktime": "mov",
 };
 
-/** Uploads one story photo to the public story-images bucket and returns its
- *  public URL plus real dimensions where they can be read server-side (JPEG/
- *  PNG/WebP/GIF), so the public pages get the correct aspect ratio — see
- *  StoryCard. HEIC/HEIF/AVIF are accepted (common straight off a phone
- *  camera) but their dimensions aren't parsed — imageSizeFromBuffer returns
- *  null for them, which StoryCard already renders as a placeholder tile
- *  rather than breaking, a documented gap rather than a blocker. */
-async function uploadStoryImage(
+/** Direct-to-storage upload, step 1, for story photos — same reasoning as
+ *  createStoryVideoUploadUrl just above: a real phone-camera photo is
+ *  routinely 2–8MB, comfortably over Next.js's 1MB default server-action
+ *  request-body limit, so routing it through this action's own body failed
+ *  silently. A signed upload URL lets the browser PUT it straight to
+ *  Storage instead — the same fix already applied to story video, now
+ *  applied to photos too. Dimensions are read in the browser (see
+ *  StoryForm.tsx) rather than from a server-side buffer, since the server
+ *  never sees the file's bytes with this approach. */
+async function createStoryImageUploadUrl(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  file: File,
-  slug: string,
-) {
-  const ext = EXT_BY_TYPE[file.type];
-  if (!ext) return { error: "Image must be a JPEG, PNG, WebP, GIF, HEIC/HEIF, or AVIF file." } as const;
+  contentType: string
+): Promise<{ error: string | null; path?: string; token?: string }> {
+  const ext = EXT_BY_TYPE[contentType];
+  if (!ext) return { error: "Image must be a JPEG, PNG, WebP, GIF, HEIC/HEIF, or AVIF file." };
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const size = imageSizeFromBuffer(buffer);
+  const path = `story-image-${crypto.randomUUID()}.${ext}`;
+  const { data, error } = await supabase.storage.from("story-images").createSignedUploadUrl(path);
+  if (error) return { error: error.message };
 
-  const path = `${slug}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}.${ext}`;
-  const { error: uploadError } = await supabase.storage
-    .from("story-images")
-    .upload(path, buffer, { contentType: file.type });
-  if (uploadError) return { error: uploadError.message } as const;
-
-  const {
-    data: { publicUrl },
-  } = supabase.storage.from("story-images").getPublicUrl(path);
-
-  return { error: null, url: publicUrl, width: size?.width ?? null, height: size?.height ?? null } as const;
+  return { error: null, path, token: data.token };
 }
 
-/** Uploads every selected photo (in order), inserting one story_images row
- *  each. The first uploaded photo across the whole story becomes the
- *  "cover" mirrored onto stories.image_path/image_width/image_height —
- *  existing rows (when editing) always sort before newly added ones, so a
- *  story's cover never silently changes just because more photos were
- *  added afterward. */
-async function uploadStoryImages(
+export async function createStoryImageUploadUrls(
+  contentTypes: string[]
+): Promise<{ error: string | null; results: { error: string | null; path?: string; token?: string }[] }> {
+  const supabase = await createClient();
+  const results = await Promise.all(contentTypes.map((type) => createStoryImageUploadUrl(supabase, type)));
+  const failed = results.find((r) => r.error);
+  return { error: failed?.error ?? null, results };
+}
+
+type UploadedImage = { path: string; width: number | null; height: number | null };
+
+/** Every photo is already in Storage by the time this runs (see
+ *  createStoryImageUploadUrls above) — this just resolves each path's
+ *  public URL and inserts the story_images rows, same "already uploaded,
+ *  only resolve + record" shape as readVideoData. The first photo across
+ *  the whole story becomes the "cover" mirrored onto
+ *  stories.image_path/image_width/image_height — existing rows (when
+ *  editing) always sort before newly added ones, so a story's cover never
+ *  silently changes just because more photos were added afterward. */
+async function recordStoryImages(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  files: File[],
-  slug: string,
+  images: UploadedImage[],
   storyId: string,
   startOrder: number
 ): Promise<{ error: string | null; cover?: { image_path: string; image_width: number | null; image_height: number | null } }> {
   let cover: { image_path: string; image_width: number | null; image_height: number | null } | undefined;
-  for (let i = 0; i < files.length; i++) {
-    const result = await uploadStoryImage(supabase, files[i], slug);
-    if (result.error !== null) return { error: result.error };
+  for (let i = 0; i < images.length; i++) {
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from("story-images").getPublicUrl(images[i].path);
 
     const { error: insertError } = await supabase.from("story_images").insert({
       story_id: storyId,
-      path: result.url,
-      width: result.width,
-      height: result.height,
+      path: publicUrl,
+      width: images[i].width,
+      height: images[i].height,
       display_order: startOrder + i,
     });
     if (insertError) return { error: insertError.message };
 
     if (startOrder === 0 && i === 0) {
-      cover = { image_path: result.url, image_width: result.width, image_height: result.height };
+      cover = { image_path: publicUrl, image_width: images[i].width, image_height: images[i].height };
     }
   }
   return { error: null, cover };
+}
+
+/** Reads the JSON array StoryForm.tsx builds after uploading each photo
+ *  directly to Storage: `[{path, width, height}, …]`. Malformed/missing
+ *  input is treated as "no photos" rather than thrown, since this comes
+ *  from the browser and a stray gap here shouldn't crash the whole save. */
+function readUploadedImages(formData: FormData): UploadedImage[] {
+  const raw = String(formData.get("uploaded_images") ?? "");
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((v): v is { path: unknown; width: unknown; height: unknown } => v && typeof v.path === "string")
+      .map((v) => ({
+        path: v.path as string,
+        width: typeof v.width === "number" ? v.width : null,
+        height: typeof v.height === "number" ? v.height : null,
+      }));
+  } catch {
+    return [];
+  }
 }
 
 export async function deleteStoryImage(imageId: string, storyId: string) {
@@ -270,9 +297,9 @@ export async function createStory(formData: FormData) {
     .single();
   if (error) return { error: error.message };
 
-  const images = formData.getAll("images").filter((f): f is File => f instanceof File && f.size > 0);
+  const images = readUploadedImages(formData);
   if (images.length > 0) {
-    const result = await uploadStoryImages(supabase, images, slug, inserted.id, 0);
+    const result = await recordStoryImages(supabase, images, inserted.id, 0);
     if (result.error !== null) return { error: result.error };
     if (result.cover) {
       await supabase.from("stories").update(result.cover).eq("id", inserted.id);
@@ -284,7 +311,7 @@ export async function createStory(formData: FormData) {
   return { error: null };
 }
 
-export async function updateStory(id: string, slug: string, formData: FormData) {
+export async function updateStory(id: string, formData: FormData) {
   const supabase = await createClient();
   const fields = readStoryFields(formData);
   const videoData = readVideoData(supabase, formData);
@@ -292,7 +319,7 @@ export async function updateStory(id: string, slug: string, formData: FormData) 
   const { error } = await supabase.from("stories").update({ ...fields, ...videoData }).eq("id", id);
   if (error) return { error: error.message };
 
-  const images = formData.getAll("images").filter((f): f is File => f instanceof File && f.size > 0);
+  const images = readUploadedImages(formData);
   if (images.length > 0) {
     const { data: existing } = await supabase
       .from("story_images")
@@ -303,7 +330,7 @@ export async function updateStory(id: string, slug: string, formData: FormData) 
       .returns<{ display_order: number }[]>();
     const startOrder = (existing?.[0]?.display_order ?? -1) + 1;
 
-    const result = await uploadStoryImages(supabase, images, slug, id, startOrder);
+    const result = await recordStoryImages(supabase, images, id, startOrder);
     if (result.error !== null) return { error: result.error };
     // A story with no cover yet (its first-ever photos) gets one now — a
     // story that already had a cover keeps it, since these are additions,
@@ -348,30 +375,27 @@ const DOCUMENT_EXT_BY_TYPE: Record<string, string> = {
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
 };
 
-/** Uploads a document to the public documents bucket and returns its public
- *  URL, original filename, and size — unlike story photos, a document's
- *  original filename matters (it's what a download is saved as), so it's
- *  kept alongside the storage path rather than discarded. */
-async function uploadDocumentFile(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  file: File,
-  slug: string,
-) {
-  const ext = DOCUMENT_EXT_BY_TYPE[file.type];
-  if (!ext) return { error: "File must be a PDF, DOC, or DOCX." } as const;
+/** Direct-to-storage upload, step 1 — a real scanned/multi-page PDF (an
+ *  Annual Report with photos, a signed Constitution scan) routinely exceeds
+ *  Next.js's 1MB default server-action request-body limit, so routing it
+ *  through this action's own body failed silently, same as every other
+ *  upload fixed this way in this project. The `documents` bucket's insert
+ *  policy is admin-gated (`bucket_id = 'documents' and public.is_admin()`),
+ *  same shape as story-videos' — that's evaluated against the signed-in
+ *  admin's session right here, when the URL is minted, not against
+ *  whatever session does the actual PUT. */
+export async function createDocumentUploadUrl(
+  contentType: string
+): Promise<{ error: string | null; path?: string; token?: string }> {
+  const ext = DOCUMENT_EXT_BY_TYPE[contentType];
+  if (!ext) return { error: "File must be a PDF, DOC, or DOCX." };
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const path = `${slug}-${Date.now().toString(36)}.${ext}`;
-  const { error: uploadError } = await supabase.storage
-    .from("documents")
-    .upload(path, buffer, { contentType: file.type });
-  if (uploadError) return { error: uploadError.message } as const;
+  const supabase = await createClient();
+  const path = `document-${crypto.randomUUID()}.${ext}`;
+  const { data, error } = await supabase.storage.from("documents").createSignedUploadUrl(path);
+  if (error) return { error: error.message };
 
-  const {
-    data: { publicUrl },
-  } = supabase.storage.from("documents").getPublicUrl(path);
-
-  return { error: null, url: publicUrl, fileName: file.name, fileSize: file.size } as const;
+  return { error: null, path, token: data.token };
 }
 
 function readDocumentFields(formData: FormData) {
@@ -383,25 +407,35 @@ function readDocumentFields(formData: FormData) {
   };
 }
 
+/** The file itself is already in Storage by the time this runs (see
+ *  createDocumentUploadUrl above) — this only resolves the path's public
+ *  URL. Original filename/size come from the client, same trust level as
+ *  video_size elsewhere: cosmetic metadata (what a download is saved as,
+ *  what size is displayed), not something a wrong value could compromise. */
+function readUploadedDocument(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  formData: FormData
+): { file_path: string; file_name: string; file_size: number } | undefined {
+  const path = String(formData.get("file_path") ?? "").trim();
+  if (!path) return undefined;
+  const fileName = String(formData.get("file_name") ?? "").trim() || "document";
+  const size = Number(formData.get("file_size") ?? 0);
+  const {
+    data: { publicUrl },
+  } = supabase.storage.from("documents").getPublicUrl(path);
+  return { file_path: publicUrl, file_name: fileName, file_size: Number.isFinite(size) ? size : 0 };
+}
+
 export async function createDocument(formData: FormData) {
   const supabase = await createClient();
   const fields = readDocumentFields(formData);
-  const slug = `${slugify(fields.title)}-${Date.now().toString(36).slice(-5)}`;
 
-  const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) {
+  const fileData = readUploadedDocument(supabase, formData);
+  if (!fileData) {
     return { error: "Please choose a file to upload." };
   }
 
-  const result = await uploadDocumentFile(supabase, file, slug);
-  if (result.error !== null) return { error: result.error };
-
-  const { error } = await supabase.from("documents").insert({
-    ...fields,
-    file_path: result.url,
-    file_name: result.fileName,
-    file_size: result.fileSize,
-  });
+  const { error } = await supabase.from("documents").insert({ ...fields, ...fileData });
   if (error) return { error: error.message };
   refresh();
   revalidatePath("/documents");
@@ -411,15 +445,7 @@ export async function createDocument(formData: FormData) {
 export async function updateDocument(id: string, formData: FormData) {
   const supabase = await createClient();
   const fields = readDocumentFields(formData);
-
-  const file = formData.get("file");
-  let fileData: { file_path: string; file_name: string; file_size: number } | undefined;
-  if (file instanceof File && file.size > 0) {
-    const slug = `${slugify(fields.title)}-${Date.now().toString(36).slice(-5)}`;
-    const result = await uploadDocumentFile(supabase, file, slug);
-    if (result.error !== null) return { error: result.error };
-    fileData = { file_path: result.url, file_name: result.fileName, file_size: result.fileSize };
-  }
+  const fileData = readUploadedDocument(supabase, formData);
 
   const { error } = await supabase.from("documents").update({ ...fields, ...fileData }).eq("id", id);
   if (error) return { error: error.message };

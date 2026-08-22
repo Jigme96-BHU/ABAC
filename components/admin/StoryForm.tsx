@@ -2,11 +2,35 @@
 
 import Image from "next/image";
 import { useEffect, useState, useTransition, type FormEvent } from "react";
-import { createStory, updateStory, createStoryVideoUploadUrl, getStoryImages, deleteStoryImage } from "@/app/admin/actions";
+import {
+  createStory,
+  updateStory,
+  createStoryVideoUploadUrl,
+  createStoryImageUploadUrls,
+  getStoryImages,
+  deleteStoryImage,
+} from "@/app/admin/actions";
 import { createClient } from "@/lib/supabase/client";
 import type { StoryRow } from "@/lib/supabase/types";
 
 const IMAGE_ACCEPT = "image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,image/avif";
+
+/** Reads width/height in the browser via createImageBitmap rather than a
+ *  server-side buffer parse — the server never sees these bytes at all with
+ *  a direct-to-storage upload. Resolves to null for a format the browser
+ *  can't decode (HEIC/HEIF support is inconsistent outside Safari) rather
+ *  than throwing; the public pages already treat a missing width/height as
+ *  a placeholder tile, not an error, same gap as before this change. */
+async function readImageDimensions(file: File): Promise<{ width: number | null; height: number | null }> {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const size = { width: bitmap.width, height: bitmap.height };
+    bitmap.close();
+    return size;
+  } catch {
+    return { width: null, height: null };
+  }
+}
 
 type GalleryImage = { id: string; path: string; width: number | null; height: number | null };
 
@@ -51,9 +75,46 @@ export default function StoryForm({
     const formData = new FormData(e.currentTarget);
 
     startTransition(async () => {
-      // Video goes straight to Storage from the browser — the same reason
-      // as the Services form's direct upload — before the video's own
-      // bytes ever exist. Photos stay on the existing synchronous path.
+      const browserSupabase = createClient();
+
+      // Both video and photos go straight to Storage from the browser —
+      // routing a real phone-camera photo (routinely 2-8MB) or a video
+      // through this form's own submit hits Next.js's 1MB default
+      // server-action request-body limit and fails silently.
+      const images = formData.getAll("images").filter((f): f is File => f instanceof File && f.size > 0);
+      if (images.length > 0) {
+        setUploadStatus(images.length === 1 ? "Uploading photo…" : `Uploading photos (0/${images.length})…`);
+        const uploadUrls = await createStoryImageUploadUrls(images.map((f) => f.type));
+        if (uploadUrls.error) {
+          setError(uploadUrls.error);
+          setUploadStatus(null);
+          return;
+        }
+
+        const uploaded: { path: string; width: number | null; height: number | null }[] = [];
+        for (let i = 0; i < images.length; i++) {
+          const uploadUrl = uploadUrls.results[i];
+          if (uploadUrl.error || !uploadUrl.path || !uploadUrl.token) {
+            setError(uploadUrl.error ?? `Couldn't prepare photo ${i + 1} for upload.`);
+            setUploadStatus(null);
+            return;
+          }
+          setUploadStatus(`Uploading photos (${i + 1}/${images.length})…`);
+          const dimensions = await readImageDimensions(images[i]);
+          const { error: putError } = await browserSupabase.storage
+            .from("story-images")
+            .uploadToSignedUrl(uploadUrl.path, uploadUrl.token, images[i]);
+          if (putError) {
+            setError(`Couldn't upload photo ${i + 1}: ${putError.message}`);
+            setUploadStatus(null);
+            return;
+          }
+          uploaded.push({ path: uploadUrl.path, ...dimensions });
+        }
+        formData.set("uploaded_images", JSON.stringify(uploaded));
+      }
+      formData.delete("images");
+
       const video = formData.get("video");
       if (video instanceof File && video.size > 0) {
         setUploadStatus("Uploading video…");
@@ -63,7 +124,6 @@ export default function StoryForm({
           setUploadStatus(null);
           return;
         }
-        const browserSupabase = createClient();
         const { error: putError } = await browserSupabase.storage
           .from("story-videos")
           .uploadToSignedUrl(uploadUrl.path, uploadUrl.token, video);
@@ -78,9 +138,7 @@ export default function StoryForm({
       formData.delete("video");
       setUploadStatus(null);
 
-      const result = editing
-        ? await updateStory(editing.id, editing.slug, formData)
-        : await createStory(formData);
+      const result = editing ? await updateStory(editing.id, formData) : await createStory(formData);
       if (result.error) {
         setError(result.error);
         return;

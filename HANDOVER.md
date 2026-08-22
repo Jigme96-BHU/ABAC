@@ -255,9 +255,18 @@ The site must not replace the live WordPress one until all of these are done.
       accepts multiple photos per story (first photo is the cover shown on
       cards), each removable individually. Also broadens accepted image
       formats beyond JPEG/PNG/WebP to GIF, HEIC/HEIF (iPhone photos), and AVIF
-      — dimensions aren't read for HEIC/HEIF/AVIF (no parser for those
-      container formats), so those degrade to a placeholder tile rather than
-      breaking, a known/documented gap.
+      — dimensions are read in the browser rather than server-side, so they
+      work for any format the visiting browser can decode (reliably for
+      JPEG/PNG/WebP/GIF/AVIF; HEIC/HEIF support varies by browser — Safari
+      yes, Chrome/Firefox often not), degrading to a placeholder tile rather
+      than breaking when it can't. **Reliability fix (2026-08-22, no new
+      migration):** story photo uploads (and document uploads on the
+      Documents tab) now go straight from the browser to Supabase Storage
+      instead of through the admin form's own submit — a real phone-camera
+      photo or scanned PDF routinely exceeds Next.js's 1MB default request
+      size for that path, which made larger uploads fail silently before
+      this fix. Video uploads already worked this way; photos and documents
+      now match.
 - [ ] **Run the corporate logo public-upload migration**
       (`0025_corporate_logo_public_upload.sql`, requires `0012`). Lets a
       corporate applicant attach their logo directly on the public
@@ -276,6 +285,14 @@ The site must not replace the live WordPress one until all of these are done.
       Services tab also gained a search bar (requester name / email /
       phone) and a bulk CSV export (filterable by action taken, service
       type, and date range).
+- [ ] **Run the documents category-fix migration**
+      (`0027_documents_category_tor.sql`, requires `0010`, already live).
+      **Fixes an active bug**: the admin Documents form has offered "TOR
+      for leadership roles" as a category since `lib/document-categories.ts`
+      added it, but `0010_documents.sql`'s database check constraint was
+      never updated to match — selecting that category and submitting
+      fails with a database error right now. This migration widens the
+      constraint to accept it.
 - [ ] **Set up the daily expiry-reminder cron job.** Add a production
       `CRON_SECRET`. `vercel.json` already schedules a daily production call
       to `/api/members/expiry-reminders`; Vercel sends
