@@ -326,6 +326,34 @@ The site must not replace the live WordPress one until all of these are done.
       dropped a redundant dimension-parsing check that made HEIC/HEIF
       photos fail outright even when small — `team_members` has no
       width/height columns, so nothing needs those dimensions.
+- [ ] **Run the email-attachments admin-only migration**
+      (`0028_email_attachments_admin_only.sql`, requires `0014`). The
+      **Email tab's attachment feature was completely non-functional**:
+      the file picker had no `onChange` handler at all (selecting a file
+      did nothing), and even if it had, `sendBulkEmail` never actually
+      attached anything to the outgoing email — `attachment_paths` was
+      only ever written to the campaign log, never read back. Both are
+      fixed: attachments now upload straight to Storage (same 1MB
+      body-size fix as everywhere else) and are genuinely attached to
+      every recipient's email via nodemailer, capped at 5MB per file.
+      Also found and fixed while there: `email-attachments`' original
+      insert policy (0014) was public with no admin gate — since this
+      bucket is only ever written to from the signed-in admin's own Email
+      tab (unlike Documents/Corporate application uploads, there's no
+      public submission flow here), this let any anonymous visitor upload
+      arbitrary files to it. This migration closes that.
+- [ ] **Services/Email/Team reliability pass (2026-08-22, no new
+      migration beyond 0028 above).**
+      - `bulkAnnouncementEmail` (the Email tab's announcement template)
+        escaped the subject line but not the message body — an admin
+        typing `<`/`>`/`&` in the message (e.g. "T&C apply") would have it
+        silently mangled or stripped by recipients' email clients. Fixed,
+        and the template now also returns a plain-text part alongside the
+        HTML one, matching every other email template in this project (it
+        previously returned HTML only).
+      - Reviewed Services and Team admin tabs end to end — search, export,
+        Action Taken tracking, and the Team list/photo flow — no further
+        issues found.
 - [ ] **Set up the daily expiry-reminder cron job.** Add a production
       `CRON_SECRET`. `vercel.json` already schedules a daily production call
       to `/api/members/expiry-reminders`; Vercel sends

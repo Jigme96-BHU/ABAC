@@ -1,7 +1,19 @@
-import { emailShell, COLOR } from "./shared";
+import { emailShell, COLOR, escapeHtml } from "./shared";
 
-export function bulkAnnouncementEmail(subject: string, message: string): string {
-  return emailShell(`
+/** Same `{ text, html }` shape as every other template in lib/emails/ —
+ *  this one previously returned HTML only, so a recipient on a plain-text
+ *  mail client (or a spam filter scoring the absence of a text part) got
+ *  nothing at all. */
+export function bulkAnnouncementEmail(subject: string, message: string): { text: string; html: string } {
+  const text = `${subject}
+
+${message}
+
+---
+This message was sent to you as an active member of the Australia–Bhutan Association of
+Canberra. If you have questions, please contact us at bhutancanberra@gmail.com.`;
+
+  const html = emailShell(`
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 24px;">
       <tr>
         <td style="padding: 20px; background: #F5F0E8; border-radius: 8px;">
@@ -9,7 +21,7 @@ export function bulkAnnouncementEmail(subject: string, message: string): string 
             ${escapeHtml(subject)}
           </h2>
           <div style="color: ${COLOR.ink}; line-height: 1.6; font-size: 15px;">
-            ${message.split('\n').join('<br />')}
+            ${escapeHtml(message).split('\n').join('<br />')}
           </div>
         </td>
       </tr>
@@ -18,15 +30,6 @@ export function bulkAnnouncementEmail(subject: string, message: string): string 
       This message was sent to you as an active member of the Australia–Bhutan Association of Canberra. If you have questions, please contact us at bhutancanberra@gmail.com.
     </p>
   `);
-}
 
-function escapeHtml(text: string): string {
-  const map: { [key: string]: string } = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#039;',
-  };
-  return text.replace(/[&<>"']/g, (char) => map[char]);
+  return { text, html };
 }
