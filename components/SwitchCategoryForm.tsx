@@ -253,7 +253,7 @@ export default function SwitchCategoryForm() {
               </div>
 
               <label className="f">
-                Email <span style={{ fontWeight: 400, color: "var(--ink-soft)" }}>(optional)</span>
+                Email <span style={{ fontWeight: 400, color: "var(--ink-soft)" }}>(recommended)</span>
               </label>
               <input name="adult_email" type="email" placeholder="name@email.com" />
 
