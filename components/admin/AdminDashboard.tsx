@@ -12,6 +12,7 @@ export default function AdminDashboard({ events }: { events: EventRow[] }) {
   const [editing, setEditing] = useState<EventRow | "new" | null>(null);
   const [rsvpEventId, setRsvpEventId] = useState<string | null>(null);
   const [rsvps, setRsvps] = useState<Rsvp[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
 
@@ -22,9 +23,18 @@ export default function AdminDashboard({ events }: { events: EventRow[] }) {
 
   function handleDelete(ev: EventRow) {
     if (!confirm(`Delete "${ev.title}"? This can't be undone.`)) return;
+    setError(null);
     startTransition(async () => {
-      await deleteEvent(ev.id);
-      router.refresh();
+      try {
+        const result = await deleteEvent(ev.id);
+        if (result.error) {
+          setError(result.error);
+          return;
+        }
+        router.refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Delete failed — please try again.");
+      }
     });
   }
 
@@ -52,6 +62,12 @@ export default function AdminDashboard({ events }: { events: EventRow[] }) {
         >
           + New event
         </button>
+      )}
+
+      {error && (
+        <div className="notice warn" style={{ marginBottom: 16 }}>
+          {error}
+        </div>
       )}
 
       {events.length === 0 ? (

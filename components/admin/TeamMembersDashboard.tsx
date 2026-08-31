@@ -15,6 +15,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 export default function TeamMembersDashboard({ members }: { members: TeamMemberRow[] }) {
   const [editing, setEditing] = useState<TeamMemberRow | "new" | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
 
@@ -25,9 +26,18 @@ export default function TeamMembersDashboard({ members }: { members: TeamMemberR
 
   function handleDelete(m: TeamMemberRow) {
     if (!confirm(`Delete "${m.name}"? This can't be undone.`)) return;
+    setError(null);
     startTransition(async () => {
-      await deleteTeamMember(m.id);
-      router.refresh();
+      try {
+        const result = await deleteTeamMember(m.id);
+        if (result.error) {
+          setError(result.error);
+          return;
+        }
+        router.refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Delete failed — please try again.");
+      }
     });
   }
 
@@ -58,6 +68,12 @@ export default function TeamMembersDashboard({ members }: { members: TeamMemberR
         >
           + New member
         </button>
+      )}
+
+      {error && (
+        <div className="notice warn" style={{ marginBottom: 16 }}>
+          {error}
+        </div>
       )}
 
       {members.length === 0 ? (

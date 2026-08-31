@@ -8,6 +8,7 @@ import type { StoryRow } from "@/lib/supabase/types";
 
 export default function StoriesDashboard({ stories }: { stories: StoryRow[] }) {
   const [editing, setEditing] = useState<StoryRow | "new" | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
 
@@ -18,9 +19,18 @@ export default function StoriesDashboard({ stories }: { stories: StoryRow[] }) {
 
   function handleDelete(s: StoryRow) {
     if (!confirm(`Delete "${s.title}"? This can't be undone.`)) return;
+    setError(null);
     startTransition(async () => {
-      await deleteStory(s.id);
-      router.refresh();
+      try {
+        const result = await deleteStory(s.id);
+        if (result.error) {
+          setError(result.error);
+          return;
+        }
+        router.refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Delete failed — please try again.");
+      }
     });
   }
 
@@ -36,6 +46,12 @@ export default function StoriesDashboard({ stories }: { stories: StoryRow[] }) {
         >
           + New story
         </button>
+      )}
+
+      {error && (
+        <div className="notice warn" style={{ marginBottom: 16 }}>
+          {error}
+        </div>
       )}
 
       {stories.length === 0 ? (

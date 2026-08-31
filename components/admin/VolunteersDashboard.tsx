@@ -99,13 +99,23 @@ function VolunteerSearchView() {
 
 function VolunteersTable({ volunteers }: { volunteers: VolunteerRow[] }) {
   const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
   function handleDelete(v: VolunteerRow) {
     if (!confirm(`Delete ${v.name}'s volunteer registration? This can't be undone.`)) return;
+    setError(null);
     startTransition(async () => {
-      await deleteVolunteer(v.id);
-      router.refresh();
+      try {
+        const result = await deleteVolunteer(v.id);
+        if (result.error) {
+          setError(result.error);
+          return;
+        }
+        router.refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Delete failed — please try again.");
+      }
     });
   }
 
@@ -114,6 +124,12 @@ function VolunteersTable({ volunteers }: { volunteers: VolunteerRow[] }) {
   }
 
   return (
+    <>
+    {error && (
+      <div className="notice warn" style={{ marginBottom: 16 }}>
+        {error}
+      </div>
+    )}
     <table className="hist-table">
       <thead>
         <tr>
@@ -159,5 +175,6 @@ function VolunteersTable({ volunteers }: { volunteers: VolunteerRow[] }) {
         ))}
       </tbody>
     </table>
+    </>
   );
 }

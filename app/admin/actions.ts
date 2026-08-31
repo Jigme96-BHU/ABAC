@@ -12,6 +12,41 @@ import { CORPORATE_TIER_FEES_CENTS, corporateTierLabel, type CorporateTier } fro
 import { serviceTypeLabel } from "@/lib/service-types";
 import type { MemberRow, ServiceRequestRow, CorporateMemberRow, VolunteerRow } from "@/lib/supabase/types";
 
+/** Best-effort Storage cleanup paired with a row delete — a Storage hiccup
+ *  must never make "delete this row" appear to fail when the row itself is
+ *  already gone, so this only ever logs, never throws or returns an error. */
+async function removeStorageObjects(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  bucket: string,
+  paths: (string | null | undefined)[]
+) {
+  const keys = paths.filter((p): p is string => !!p);
+  if (keys.length === 0) return;
+  try {
+    await supabase.storage.from(bucket).remove(keys);
+  } catch (err) {
+    console.error(`storage cleanup failed (${bucket}):`, err);
+  }
+}
+
+/** Public-bucket *_path fields store the full getPublicUrl() result, not a
+ *  bare object key — this recovers the key so it can be passed to
+ *  storage.remove(). Returns null for anything that isn't actually a
+ *  Storage URL in this bucket, e.g. team_members' seeded local /img/...
+ *  paths (0023_team_members_seed.sql), which were never uploaded to
+ *  Storage and must never be "removed" from it. */
+function storageKeyFromPublicUrl(bucket: string, url: string | null | undefined): string | null {
+  if (!url) return null;
+  const marker = `/storage/v1/object/public/${bucket}/`;
+  const idx = url.indexOf(marker);
+  if (idx === -1) return null;
+  try {
+    return decodeURIComponent(url.slice(idx + marker.length));
+  } catch {
+    return null;
+  }
+}
+
 export type EventInput = {
   title: string;
   date: string;
@@ -204,8 +239,18 @@ function readUploadedImages(formData: FormData): UploadedImage[] {
 
 export async function deleteStoryImage(imageId: string, storyId: string) {
   const supabase = await createClient();
+  const { data: deleted } = await supabase
+    .from("story_images")
+    .select("path")
+    .eq("id", imageId)
+    .maybeSingle<{ path: string }>();
+
   const { error } = await supabase.from("story_images").delete().eq("id", imageId);
   if (error) return { error: error.message };
+
+  await removeStorageObjects(supabase, "story-images", [
+    storageKeyFromPublicUrl("story-images", deleted?.path),
+  ]);
 
   // If the deleted image was the cover, promote whichever photo is now
   // first — stories.image_path must never point at a row that no longer
@@ -346,8 +391,31 @@ export async function updateStory(id: string, formData: FormData) {
 
 export async function deleteStory(id: string) {
   const supabase = await createClient();
+
+  // Fetched before the delete — story_images cascades away with the story
+  // row (on delete cascade), so its paths would be unrecoverable after.
+  const [{ data: story }, { data: images }] = await Promise.all([
+    supabase
+      .from("stories")
+      .select("image_path, video_path")
+      .eq("id", id)
+      .maybeSingle<{ image_path: string | null; video_path: string | null }>(),
+    supabase.from("story_images").select("path").eq("story_id", id).returns<{ path: string }[]>(),
+  ]);
+
   const { error } = await supabase.from("stories").delete().eq("id", id);
   if (error) return { error: error.message };
+
+  await Promise.all([
+    removeStorageObjects(supabase, "story-images", [
+      storageKeyFromPublicUrl("story-images", story?.image_path),
+      ...(images ?? []).map((img) => storageKeyFromPublicUrl("story-images", img.path)),
+    ]),
+    removeStorageObjects(supabase, "story-videos", [
+      storageKeyFromPublicUrl("story-videos", story?.video_path),
+    ]),
+  ]);
+
   refresh();
   return { error: null };
 }
@@ -455,8 +523,19 @@ export async function updateDocument(id: string, formData: FormData) {
 
 export async function deleteDocument(id: string) {
   const supabase = await createClient();
+  const { data: doc } = await supabase
+    .from("documents")
+    .select("file_path")
+    .eq("id", id)
+    .maybeSingle<{ file_path: string }>();
+
   const { error } = await supabase.from("documents").delete().eq("id", id);
   if (error) return { error: error.message };
+
+  await removeStorageObjects(supabase, "documents", [
+    storageKeyFromPublicUrl("documents", doc?.file_path),
+  ]);
+
   refresh();
   revalidatePath("/documents");
   return { error: null };
@@ -675,8 +754,28 @@ export async function getServiceDocumentUrl(path: string) {
 
 export async function deleteServiceRequest(id: string) {
   const supabase = await createClient();
+  const { data: request } = await supabase
+    .from("service_requests")
+    .select("passport_path, visa_path, photo_id_path, proof_of_residency_path")
+    .eq("id", id)
+    .maybeSingle<{
+      passport_path: string | null;
+      visa_path: string | null;
+      photo_id_path: string | null;
+      proof_of_residency_path: string | null;
+    }>();
+
   const { error } = await supabase.from("service_requests").delete().eq("id", id);
   if (error) return { error: error.message };
+
+  // Already bare Storage paths, not public URLs — this bucket is private.
+  await removeStorageObjects(supabase, "service-documents", [
+    request?.passport_path,
+    request?.visa_path,
+    request?.photo_id_path,
+    request?.proof_of_residency_path,
+  ]);
+
   revalidatePath("/admin");
   return { error: null };
 }
@@ -1087,8 +1186,21 @@ export async function updateTeamMember(id: string, formData: FormData) {
 
 export async function deleteTeamMember(id: string) {
   const supabase = await createClient();
+  const { data: member } = await supabase
+    .from("team_members")
+    .select("photo_path")
+    .eq("id", id)
+    .maybeSingle<{ photo_path: string | null }>();
+
   const { error } = await supabase.from("team_members").delete().eq("id", id);
   if (error) return { error: error.message };
+
+  // storageKeyFromPublicUrl returns null for the seeded static /img/...
+  // paths (0023_team_members_seed.sql), so those are correctly left alone.
+  await removeStorageObjects(supabase, "team-photos", [
+    storageKeyFromPublicUrl("team-photos", member?.photo_path),
+  ]);
+
   refresh();
   revalidatePath("/team");
   return { error: null };
@@ -1393,8 +1505,23 @@ export async function createCorporateMemberManually(formData: FormData): Promise
 
 export async function deleteCorporateMember(id: string): Promise<{ error: string | null }> {
   const supabase = await createClient();
+  const { data: member } = await supabase
+    .from("corporate_members")
+    .select("logo_path, business_certificate_path")
+    .eq("id", id)
+    .maybeSingle<{ logo_path: string | null; business_certificate_path: string | null }>();
+
   const { error } = await supabase.from("corporate_members").delete().eq("id", id);
   if (error) return { error: error.message };
+
+  await Promise.all([
+    removeStorageObjects(supabase, "corporate-logos", [
+      storageKeyFromPublicUrl("corporate-logos", member?.logo_path),
+    ]),
+    // business_certificate_path is already a bare path — that bucket is private.
+    removeStorageObjects(supabase, "corporate-documents", [member?.business_certificate_path]),
+  ]);
+
   revalidatePath("/admin");
   revalidatePath("/partners");
   return { error: null };
