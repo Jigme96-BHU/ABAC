@@ -71,16 +71,35 @@ export default async function AdminPage() {
     );
   }
 
+  // Promise.allSettled, not .all — these 8 tabs' data is otherwise
+  // independent, so one query having a bad moment (a transient Supabase
+  // hiccup, a rate limit) must not take down every other tab too. A plain
+  // Promise.all rejects the instant any one of them rejects, which crashed
+  // this entire page — for every tab, not just the affected one — any time
+  // that happened to be the one that failed. See settle() below: a
+  // rejection degrades to an empty/zero result and a server-side log line,
+  // never a thrown error that reaches the render.
+  function settle<T>(result: PromiseSettledResult<{ data: T | null; error: unknown }>, label: string): T | null {
+    if (result.status === "rejected") {
+      console.error(`/admin: ${label} query failed:`, result.reason);
+      return null;
+    }
+    if (result.value.error) {
+      console.error(`/admin: ${label} query returned an error:`, result.value.error);
+    }
+    return result.value.data;
+  }
+
   const [
-    { data: events },
-    { data: stories },
-    { data: documents },
-    { data: volunteers },
-    { data: corporateMembers },
-    { data: serviceRequests },
-    { data: teamMembers },
-    { data: members, count: memberCount },
-  ] = await Promise.all([
+    eventsResult,
+    storiesResult,
+    documentsResult,
+    volunteersResult,
+    corporateMembersResult,
+    serviceRequestsResult,
+    teamMembersResult,
+    membersResult,
+  ] = await Promise.allSettled([
     supabase.from("events").select("*").order("date", { ascending: true }).returns<EventRow[]>(),
     supabase.from("stories").select("*").order("date", { ascending: false }).returns<StoryRow[]>(),
     supabase
@@ -121,6 +140,16 @@ export default async function AdminPage() {
       .limit(50)
       .returns<MemberRow[]>(),
   ]);
+
+  const events = settle(eventsResult, "events");
+  const stories = settle(storiesResult, "stories");
+  const documents = settle(documentsResult, "documents");
+  const volunteers = settle(volunteersResult, "volunteers");
+  const corporateMembers = settle(corporateMembersResult, "corporate_members");
+  const serviceRequests = settle(serviceRequestsResult, "service_requests");
+  const teamMembers = settle(teamMembersResult, "team_members");
+  const members = settle(membersResult, "members");
+  const memberCount = membersResult.status === "fulfilled" ? membersResult.value.count : null;
 
   return (
     <main>
