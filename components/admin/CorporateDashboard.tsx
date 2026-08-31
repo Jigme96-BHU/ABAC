@@ -93,9 +93,16 @@ function CorporateTable({ members }: { members: CorporateMemberRow[] }) {
     if (!confirm(`Approve ${m.business_name}'s application? This emails them a Stripe payment link.`)) return;
     clearRowError(m.id);
     startTransition(async () => {
-      const result = await approveCorporateMember(m.id);
-      if (result.error) setRowError((prev) => ({ ...prev, [m.id]: result.error! }));
-      router.refresh();
+      try {
+        const result = await approveCorporateMember(m.id);
+        if (result.error) {
+          setRowError((prev) => ({ ...prev, [m.id]: result.error! }));
+          return;
+        }
+        router.refresh();
+      } catch (err) {
+        setRowError((prev) => ({ ...prev, [m.id]: err instanceof Error ? err.message : "Approve failed — please try again." }));
+      }
     });
   }
 
@@ -103,9 +110,16 @@ function CorporateTable({ members }: { members: CorporateMemberRow[] }) {
     if (!confirm(`Reject ${m.business_name}'s application? They'll receive an email notifying them.`)) return;
     clearRowError(m.id);
     startTransition(async () => {
-      const result = await rejectCorporateMember(m.id);
-      if (result.error) setRowError((prev) => ({ ...prev, [m.id]: result.error! }));
-      router.refresh();
+      try {
+        const result = await rejectCorporateMember(m.id);
+        if (result.error) {
+          setRowError((prev) => ({ ...prev, [m.id]: result.error! }));
+          return;
+        }
+        router.refresh();
+      } catch (err) {
+        setRowError((prev) => ({ ...prev, [m.id]: err instanceof Error ? err.message : "Reject failed — please try again." }));
+      }
     });
   }
 
@@ -113,9 +127,16 @@ function CorporateTable({ members }: { members: CorporateMemberRow[] }) {
     if (!confirm(`Delete ${m.business_name}'s record permanently? This can't be undone.`)) return;
     clearRowError(m.id);
     startTransition(async () => {
-      const result = await deleteCorporateMember(m.id);
-      if (result.error) setRowError((prev) => ({ ...prev, [m.id]: result.error! }));
-      router.refresh();
+      try {
+        const result = await deleteCorporateMember(m.id);
+        if (result.error) {
+          setRowError((prev) => ({ ...prev, [m.id]: result.error! }));
+          return;
+        }
+        router.refresh();
+      } catch (err) {
+        setRowError((prev) => ({ ...prev, [m.id]: err instanceof Error ? err.message : "Delete failed — please try again." }));
+      }
     });
   }
 

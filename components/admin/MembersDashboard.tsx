@@ -136,21 +136,29 @@ function MemberSearchView({
   function handleResend(memberId: string) {
     setResendMessage(null);
     startTransition(async () => {
-      const res = await resendMembershipConfirmation(memberId);
-      setResendMessage(res.error ? `Couldn't resend: ${res.error}` : "Confirmation email resent.");
+      try {
+        const res = await resendMembershipConfirmation(memberId);
+        setResendMessage(res.error ? `Couldn't resend: ${res.error}` : "Confirmation email resent.");
+      } catch (err) {
+        setResendMessage(`Couldn't resend: ${err instanceof Error ? err.message : "please try again."}`);
+      }
     });
   }
 
   function handleDelete(m: MemberRow) {
     if (!confirm(`Delete ${m.name}'s membership record permanently? This can't be undone.`)) return;
     startTransition(async () => {
-      const res = await deleteMember(m.id);
-      if (res.error) {
-        setError(res.error);
-        return;
+      try {
+        const res = await deleteMember(m.id);
+        if (res.error) {
+          setError(res.error);
+          return;
+        }
+        setResults((prev) => prev.filter((r) => r.id !== m.id));
+        if (detail?.member.id === m.id) setDetail(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Delete failed — please try again.");
       }
-      setResults((prev) => prev.filter((r) => r.id !== m.id));
-      if (detail?.member.id === m.id) setDetail(null);
     });
   }
 

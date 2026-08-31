@@ -118,26 +118,41 @@ function ServiceSearchView() {
 function RequestsTable({ requests }: { requests: ServiceRequestRow[] }) {
   const [pending, startTransition] = useTransition();
   const [busyPath, setBusyPath] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
   function handleView(path: string) {
     setBusyPath(path);
     startTransition(async () => {
-      const result = await getServiceDocumentUrl(path);
-      setBusyPath(null);
-      if (result.error || !result.url) {
-        alert(`Couldn't open that document: ${result.error ?? "unknown error"}`);
-        return;
+      try {
+        const result = await getServiceDocumentUrl(path);
+        setBusyPath(null);
+        if (result.error || !result.url) {
+          alert(`Couldn't open that document: ${result.error ?? "unknown error"}`);
+          return;
+        }
+        window.open(result.url, "_blank", "noopener");
+      } catch (err) {
+        setBusyPath(null);
+        alert(`Couldn't open that document: ${err instanceof Error ? err.message : "please try again."}`);
       }
-      window.open(result.url, "_blank", "noopener");
     });
   }
 
   function handleDelete(r: ServiceRequestRow) {
     if (!confirm(`Delete ${r.requester_name}'s service request? This can't be undone.`)) return;
+    setError(null);
     startTransition(async () => {
-      await deleteServiceRequest(r.id);
-      router.refresh();
+      try {
+        const result = await deleteServiceRequest(r.id);
+        if (result.error) {
+          setError(result.error);
+          return;
+        }
+        router.refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Delete failed — please try again.");
+      }
     });
   }
 
@@ -146,6 +161,12 @@ function RequestsTable({ requests }: { requests: ServiceRequestRow[] }) {
   }
 
   return (
+    <>
+    {error && (
+      <div className="notice warn" style={{ marginBottom: 16 }}>
+        {error}
+      </div>
+    )}
     <table className="hist-table">
       <thead>
         <tr>
@@ -201,6 +222,7 @@ function RequestsTable({ requests }: { requests: ServiceRequestRow[] }) {
         ))}
       </tbody>
     </table>
+    </>
   );
 }
 

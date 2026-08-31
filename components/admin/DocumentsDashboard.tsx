@@ -9,6 +9,7 @@ import type { DocumentRow } from "@/lib/supabase/types";
 
 export default function DocumentsDashboard({ documents }: { documents: DocumentRow[] }) {
   const [editing, setEditing] = useState<DocumentRow | "new" | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
 
@@ -19,9 +20,18 @@ export default function DocumentsDashboard({ documents }: { documents: DocumentR
 
   function handleDelete(d: DocumentRow) {
     if (!confirm(`Delete "${d.title}"? This can't be undone.`)) return;
+    setError(null);
     startTransition(async () => {
-      await deleteDocument(d.id);
-      router.refresh();
+      try {
+        const result = await deleteDocument(d.id);
+        if (result.error) {
+          setError(result.error);
+          return;
+        }
+        router.refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Delete failed — please try again.");
+      }
     });
   }
 
@@ -37,6 +47,12 @@ export default function DocumentsDashboard({ documents }: { documents: DocumentR
         >
           + New document
         </button>
+      )}
+
+      {error && (
+        <div className="notice warn" style={{ marginBottom: 16 }}>
+          {error}
+        </div>
       )}
 
       {documents.length === 0 ? (
