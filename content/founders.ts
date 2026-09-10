@@ -23,7 +23,7 @@ export const FOUNDERS: Founder[] = [
   },
   {
     slug: "drukdra-wangchuk",
-    name: "Mr Drukdra Wangchuk",
-    image: null,
+    name: "Lam Drukdra Wangchuk",
+    image: "/img/team/founder/drukdra-wangchuk.jpeg",
   },
 ];
