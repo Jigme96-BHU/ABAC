@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import TeamMemberForm from "./TeamMemberForm";
 import { deleteTeamMember } from "@/app/admin/actions";
+import { usePendingDelete } from "@/lib/usePendingDelete";
 import type { TeamMemberRow } from "@/lib/supabase/types";
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -17,6 +18,7 @@ export default function TeamMembersDashboard({ members }: { members: TeamMemberR
   const [editing, setEditing] = useState<TeamMemberRow | "new" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const { pendingId: pendingDeleteId, start: startDelete, cancel: cancelDelete } = usePendingDelete();
   const router = useRouter();
 
   function handleDone() {
@@ -25,19 +27,21 @@ export default function TeamMembersDashboard({ members }: { members: TeamMemberR
   }
 
   function handleDelete(m: TeamMemberRow) {
-    if (!confirm(`Delete "${m.name}"? This can't be undone.`)) return;
+    if (!confirm(`Delete "${m.name}"?`)) return;
     setError(null);
-    startTransition(async () => {
-      try {
-        const result = await deleteTeamMember(m.id);
-        if (result.error) {
-          setError(result.error);
-          return;
+    startDelete(m.id, () => {
+      startTransition(async () => {
+        try {
+          const result = await deleteTeamMember(m.id);
+          if (result.error) {
+            setError(result.error);
+            return;
+          }
+          router.refresh();
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Delete failed — please try again.");
         }
-        router.refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Delete failed — please try again.");
-      }
+      });
     });
   }
 
@@ -98,26 +102,37 @@ export default function TeamMembersDashboard({ members }: { members: TeamMemberR
                 {groupedByCategory[category]
                   .sort((a, b) => a.display_order - b.display_order)
                   .map((m) => (
-                    <tr key={m.id}>
+                    <tr key={m.id} style={pendingDeleteId === m.id ? { opacity: 0.5 } : undefined}>
                       <td>{m.name}</td>
                       <td>{m.role}</td>
                       <td>{m.email || "—"}</td>
                       <td>{m.active ? "Active" : "Inactive"}</td>
                       <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                        <button
-                          className="btn btn-ghost btn-sm"
-                          style={{ marginRight: 6 }}
-                          onClick={() => setEditing(m)}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          className="btn btn-ghost btn-sm"
-                          onClick={() => handleDelete(m)}
-                          disabled={pending}
-                        >
-                          Delete
-                        </button>
+                        {pendingDeleteId === m.id ? (
+                          <span style={{ fontSize: 13, color: "var(--ink-soft)" }}>
+                            Deleting…{" "}
+                            <button className="btn btn-ghost btn-sm" onClick={cancelDelete}>
+                              Undo
+                            </button>
+                          </span>
+                        ) : (
+                          <>
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              style={{ marginRight: 6 }}
+                              onClick={() => setEditing(m)}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              onClick={() => handleDelete(m)}
+                              disabled={pending}
+                            >
+                              Delete
+                            </button>
+                          </>
+                        )}
                       </td>
                     </tr>
                   ))}

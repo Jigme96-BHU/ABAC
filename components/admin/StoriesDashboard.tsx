@@ -4,12 +4,14 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import StoryForm from "./StoryForm";
 import { deleteStory } from "@/app/admin/actions";
+import { usePendingDelete } from "@/lib/usePendingDelete";
 import type { StoryRow } from "@/lib/supabase/types";
 
 export default function StoriesDashboard({ stories }: { stories: StoryRow[] }) {
   const [editing, setEditing] = useState<StoryRow | "new" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const { pendingId: pendingDeleteId, start: startDelete, cancel: cancelDelete } = usePendingDelete();
   const router = useRouter();
 
   function handleDone() {
@@ -18,19 +20,21 @@ export default function StoriesDashboard({ stories }: { stories: StoryRow[] }) {
   }
 
   function handleDelete(s: StoryRow) {
-    if (!confirm(`Delete "${s.title}"? This can't be undone.`)) return;
+    if (!confirm(`Delete "${s.title}"?`)) return;
     setError(null);
-    startTransition(async () => {
-      try {
-        const result = await deleteStory(s.id);
-        if (result.error) {
-          setError(result.error);
-          return;
+    startDelete(s.id, () => {
+      startTransition(async () => {
+        try {
+          const result = await deleteStory(s.id);
+          if (result.error) {
+            setError(result.error);
+            return;
+          }
+          router.refresh();
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Delete failed — please try again.");
         }
-        router.refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Delete failed — please try again.");
-      }
+      });
     });
   }
 
@@ -70,27 +74,38 @@ export default function StoriesDashboard({ stories }: { stories: StoryRow[] }) {
           </thead>
           <tbody>
             {stories.map((s) => (
-              <tr key={s.id}>
+              <tr key={s.id} style={pendingDeleteId === s.id ? { opacity: 0.5 } : undefined}>
                 <td>{s.date}</td>
                 <td>{s.title}</td>
                 <td>{s.image_path ? "Yes" : "—"}</td>
                 <td>{s.video_path ? "Yes" : "—"}</td>
                 <td>{s.published ? "Published" : "Draft"}</td>
                 <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    style={{ marginRight: 6 }}
-                    onClick={() => setEditing(s)}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => handleDelete(s)}
-                    disabled={pending}
-                  >
-                    Delete
-                  </button>
+                  {pendingDeleteId === s.id ? (
+                    <span style={{ fontSize: 13, color: "var(--ink-soft)" }}>
+                      Deleting…{" "}
+                      <button className="btn btn-ghost btn-sm" onClick={cancelDelete}>
+                        Undo
+                      </button>
+                    </span>
+                  ) : (
+                    <>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        style={{ marginRight: 6 }}
+                        onClick={() => setEditing(s)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => handleDelete(s)}
+                        disabled={pending}
+                      >
+                        Delete
+                      </button>
+                    </>
+                  )}
                 </td>
               </tr>
             ))}

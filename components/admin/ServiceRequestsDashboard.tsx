@@ -12,6 +12,7 @@ import {
 } from "@/app/admin/actions";
 import { downloadCsv, type CsvColumn } from "@/lib/csv";
 import { serviceTypeLabel, SERVICE_TYPES } from "@/lib/service-types";
+import { usePendingDelete } from "@/lib/usePendingDelete";
 import type { ServiceRequestRow } from "@/lib/supabase/types";
 
 const DOCUMENT_FIELDS: { key: keyof ServiceRequestRow; label: string }[] = [
@@ -123,6 +124,7 @@ function RequestsTable({ requests }: { requests: ServiceRequestRow[] }) {
   const [pending, startTransition] = useTransition();
   const [busyPath, setBusyPath] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { pendingId: pendingDeleteId, start: startDelete, cancel: cancelDelete } = usePendingDelete();
   const router = useRouter();
 
   function handleView(path: string) {
@@ -144,19 +146,21 @@ function RequestsTable({ requests }: { requests: ServiceRequestRow[] }) {
   }
 
   function handleDelete(r: ServiceRequestRow) {
-    if (!confirm(`Delete ${r.requester_name}'s service request? This can't be undone.`)) return;
+    if (!confirm(`Delete ${r.requester_name}'s service request?`)) return;
     setError(null);
-    startTransition(async () => {
-      try {
-        const result = await deleteServiceRequest(r.id);
-        if (result.error) {
-          setError(result.error);
-          return;
+    startDelete(r.id, () => {
+      startTransition(async () => {
+        try {
+          const result = await deleteServiceRequest(r.id);
+          if (result.error) {
+            setError(result.error);
+            return;
+          }
+          router.refresh();
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Delete failed — please try again.");
         }
-        router.refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Delete failed — please try again.");
-      }
+      });
     });
   }
 
@@ -186,7 +190,7 @@ function RequestsTable({ requests }: { requests: ServiceRequestRow[] }) {
       </thead>
       <tbody>
         {requests.map((r) => (
-          <tr key={r.id}>
+          <tr key={r.id} style={pendingDeleteId === r.id ? { opacity: 0.5 } : undefined}>
             <td>{r.requester_name}</td>
             <td>{serviceTypeLabel(r.service_type)}</td>
             <td>
@@ -218,9 +222,18 @@ function RequestsTable({ requests }: { requests: ServiceRequestRow[] }) {
               <ActionTakenCell request={r} onChanged={() => router.refresh()} />
             </td>
             <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-              <button className="btn btn-ghost btn-sm" onClick={() => handleDelete(r)} disabled={pending}>
-                Delete
-              </button>
+              {pendingDeleteId === r.id ? (
+                <span style={{ fontSize: 13, color: "var(--ink-soft)" }}>
+                  Deleting…{" "}
+                  <button className="btn btn-ghost btn-sm" onClick={cancelDelete}>
+                    Undo
+                  </button>
+                </span>
+              ) : (
+                <button className="btn btn-ghost btn-sm" onClick={() => handleDelete(r)} disabled={pending}>
+                  Delete
+                </button>
+              )}
             </td>
           </tr>
         ))}

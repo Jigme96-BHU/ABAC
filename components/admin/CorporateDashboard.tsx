@@ -19,6 +19,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { downloadCsv, type CsvColumn } from "@/lib/csv";
 import { CORPORATE_TIERS, corporateTierLabel, type CorporateTier } from "@/lib/corporate-tiers";
+import { usePendingDelete } from "@/lib/usePendingDelete";
 import type { CorporateMemberRow } from "@/lib/supabase/types";
 
 const STATUS_LABEL: Record<CorporateMemberRow["status"], string> = {
@@ -79,6 +80,7 @@ function CorporateTable({ members }: { members: CorporateMemberRow[] }) {
   const [pending, startTransition] = useTransition();
   const [rowError, setRowError] = useState<Record<string, string>>({});
   const [busyPath, setBusyPath] = useState<string | null>(null);
+  const { pendingId: pendingDeleteId, start: startDelete, cancel: cancelDelete } = usePendingDelete();
   const router = useRouter();
 
   function clearRowError(id: string) {
@@ -124,19 +126,21 @@ function CorporateTable({ members }: { members: CorporateMemberRow[] }) {
   }
 
   function handleDelete(m: CorporateMemberRow) {
-    if (!confirm(`Delete ${m.business_name}'s record permanently? This can't be undone.`)) return;
+    if (!confirm(`Delete ${m.business_name}'s record permanently?`)) return;
     clearRowError(m.id);
-    startTransition(async () => {
-      try {
-        const result = await deleteCorporateMember(m.id);
-        if (result.error) {
-          setRowError((prev) => ({ ...prev, [m.id]: result.error! }));
-          return;
+    startDelete(m.id, () => {
+      startTransition(async () => {
+        try {
+          const result = await deleteCorporateMember(m.id);
+          if (result.error) {
+            setRowError((prev) => ({ ...prev, [m.id]: result.error! }));
+            return;
+          }
+          router.refresh();
+        } catch (err) {
+          setRowError((prev) => ({ ...prev, [m.id]: err instanceof Error ? err.message : "Delete failed — please try again." }));
         }
-        router.refresh();
-      } catch (err) {
-        setRowError((prev) => ({ ...prev, [m.id]: err instanceof Error ? err.message : "Delete failed — please try again." }));
-      }
+      });
     });
   }
 
@@ -246,7 +250,7 @@ function CorporateTable({ members }: { members: CorporateMemberRow[] }) {
       </thead>
       <tbody>
         {members.map((m) => (
-          <tr key={m.id}>
+          <tr key={m.id} style={pendingDeleteId === m.id ? { opacity: 0.5 } : undefined}>
             <td>
               <strong>{m.business_name}</strong>
               {m.website && <div style={{ fontSize: 12, color: "var(--ink-soft)" }}>{m.website}</div>}
@@ -321,14 +325,23 @@ function CorporateTable({ members }: { members: CorporateMemberRow[] }) {
                   </button>
                 </div>
               )}
-              <button
-                className="btn btn-ghost btn-sm"
-                style={{ marginTop: 6, color: "#c33" }}
-                onClick={() => handleDelete(m)}
-                disabled={pending}
-              >
-                Delete
-              </button>
+              {pendingDeleteId === m.id ? (
+                <div style={{ marginTop: 6, fontSize: 13, color: "var(--ink-soft)" }}>
+                  Deleting…{" "}
+                  <button className="btn btn-ghost btn-sm" onClick={cancelDelete}>
+                    Undo
+                  </button>
+                </div>
+              ) : (
+                <button
+                  className="btn btn-ghost btn-sm"
+                  style={{ marginTop: 6, color: "#c33" }}
+                  onClick={() => handleDelete(m)}
+                  disabled={pending}
+                >
+                  Delete
+                </button>
+              )}
             </td>
           </tr>
         ))}

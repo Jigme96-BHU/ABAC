@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { deleteVolunteer, searchVolunteers } from "@/app/admin/actions";
 import { ageFrom } from "@/lib/validation";
 import { downloadCsv, type CsvColumn } from "@/lib/csv";
+import { usePendingDelete } from "@/lib/usePendingDelete";
 import type { VolunteerRow } from "@/lib/supabase/types";
 
 const CSV_COLUMNS: CsvColumn<VolunteerRow>[] = [
@@ -104,22 +105,25 @@ function VolunteerSearchView() {
 function VolunteersTable({ volunteers }: { volunteers: VolunteerRow[] }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const { pendingId: pendingDeleteId, start: startDelete, cancel: cancelDelete } = usePendingDelete();
   const router = useRouter();
 
   function handleDelete(v: VolunteerRow) {
-    if (!confirm(`Delete ${v.name}'s volunteer registration? This can't be undone.`)) return;
+    if (!confirm(`Delete ${v.name}'s volunteer registration?`)) return;
     setError(null);
-    startTransition(async () => {
-      try {
-        const result = await deleteVolunteer(v.id);
-        if (result.error) {
-          setError(result.error);
-          return;
+    startDelete(v.id, () => {
+      startTransition(async () => {
+        try {
+          const result = await deleteVolunteer(v.id);
+          if (result.error) {
+            setError(result.error);
+            return;
+          }
+          router.refresh();
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Delete failed — please try again.");
         }
-        router.refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Delete failed — please try again.");
-      }
+      });
     });
   }
 
@@ -150,7 +154,7 @@ function VolunteersTable({ volunteers }: { volunteers: VolunteerRow[] }) {
       </thead>
       <tbody>
         {volunteers.map((v) => (
-          <tr key={v.id}>
+          <tr key={v.id} style={pendingDeleteId === v.id ? { opacity: 0.5 } : undefined}>
             <td>{v.name}</td>
             <td>{ageFrom(v.date_of_birth)}</td>
             <td>{v.sex}</td>
@@ -171,9 +175,18 @@ function VolunteersTable({ volunteers }: { volunteers: VolunteerRow[] }) {
             </td>
             <td>{new Date(v.created_at).toLocaleDateString("en-AU")}</td>
             <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-              <button className="btn btn-ghost btn-sm" onClick={() => handleDelete(v)} disabled={pending}>
-                Delete
-              </button>
+              {pendingDeleteId === v.id ? (
+                <span style={{ fontSize: 13, color: "var(--ink-soft)" }}>
+                  Deleting…{" "}
+                  <button className="btn btn-ghost btn-sm" onClick={cancelDelete}>
+                    Undo
+                  </button>
+                </span>
+              ) : (
+                <button className="btn btn-ghost btn-sm" onClick={() => handleDelete(v)} disabled={pending}>
+                  Delete
+                </button>
+              )}
             </td>
           </tr>
         ))}
