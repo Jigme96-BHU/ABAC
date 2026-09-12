@@ -4,6 +4,7 @@ import { Fragment, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import EventForm from "./EventForm";
 import { deleteEvent, getEventRsvps } from "@/app/admin/actions";
+import { usePendingDelete } from "@/lib/usePendingDelete";
 import type { EventRow } from "@/lib/supabase/types";
 
 type Rsvp = { id: string; name: string; email: string; phone: string; created_at: string };
@@ -14,6 +15,7 @@ export default function AdminDashboard({ events }: { events: EventRow[] }) {
   const [rsvps, setRsvps] = useState<Rsvp[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const { pendingId: pendingDeleteId, start: startDelete, cancel: cancelDelete } = usePendingDelete();
   const router = useRouter();
 
   function handleDone() {
@@ -22,19 +24,21 @@ export default function AdminDashboard({ events }: { events: EventRow[] }) {
   }
 
   function handleDelete(ev: EventRow) {
-    if (!confirm(`Delete "${ev.title}"? This can't be undone.`)) return;
+    if (!confirm(`Delete "${ev.title}"?`)) return;
     setError(null);
-    startTransition(async () => {
-      try {
-        const result = await deleteEvent(ev.id);
-        if (result.error) {
-          setError(result.error);
-          return;
+    startDelete(ev.id, () => {
+      startTransition(async () => {
+        try {
+          const result = await deleteEvent(ev.id);
+          if (result.error) {
+            setError(result.error);
+            return;
+          }
+          router.refresh();
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Delete failed — please try again.");
         }
-        router.refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Delete failed — please try again.");
-      }
+      });
     });
   }
 
@@ -91,36 +95,47 @@ export default function AdminDashboard({ events }: { events: EventRow[] }) {
           <tbody>
             {events.map((ev) => (
               <Fragment key={ev.id}>
-                <tr>
+                <tr style={pendingDeleteId === ev.id ? { opacity: 0.5 } : undefined}>
                   <td>{ev.date}</td>
                   <td>{ev.title}</td>
                   <td>{ev.access === "members" ? "Members only" : "Open"}</td>
                   <td>{ev.published ? "Published" : "Draft"}</td>
                   <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                    {ev.cta === "rsvp" && (
-                      <button
-                        className="btn btn-ghost btn-sm"
-                        style={{ marginRight: 6 }}
-                        onClick={() => toggleRsvps(ev)}
-                        disabled={pending}
-                      >
-                        {rsvpEventId === ev.id ? "Hide RSVPs" : "View RSVPs"}
-                      </button>
+                    {pendingDeleteId === ev.id ? (
+                      <span style={{ fontSize: 13, color: "var(--ink-soft)" }}>
+                        Deleting…{" "}
+                        <button className="btn btn-ghost btn-sm" onClick={cancelDelete}>
+                          Undo
+                        </button>
+                      </span>
+                    ) : (
+                      <>
+                        {ev.cta === "rsvp" && (
+                          <button
+                            className="btn btn-ghost btn-sm"
+                            style={{ marginRight: 6 }}
+                            onClick={() => toggleRsvps(ev)}
+                            disabled={pending}
+                          >
+                            {rsvpEventId === ev.id ? "Hide RSVPs" : "View RSVPs"}
+                          </button>
+                        )}
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          style={{ marginRight: 6 }}
+                          onClick={() => setEditing(ev)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => handleDelete(ev)}
+                          disabled={pending}
+                        >
+                          Delete
+                        </button>
+                      </>
                     )}
-                    <button
-                      className="btn btn-ghost btn-sm"
-                      style={{ marginRight: 6 }}
-                      onClick={() => setEditing(ev)}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      className="btn btn-ghost btn-sm"
-                      onClick={() => handleDelete(ev)}
-                      disabled={pending}
-                    >
-                      Delete
-                    </button>
                   </td>
                 </tr>
                 {rsvpEventId === ev.id && (

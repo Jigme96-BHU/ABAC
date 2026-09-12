@@ -5,12 +5,14 @@ import { useRouter } from "next/navigation";
 import DocumentForm from "./DocumentForm";
 import { deleteDocument } from "@/app/admin/actions";
 import { documentCategoryLabel } from "@/lib/document-categories";
+import { usePendingDelete } from "@/lib/usePendingDelete";
 import type { DocumentRow } from "@/lib/supabase/types";
 
 export default function DocumentsDashboard({ documents }: { documents: DocumentRow[] }) {
   const [editing, setEditing] = useState<DocumentRow | "new" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const { pendingId: pendingDeleteId, start: startDelete, cancel: cancelDelete } = usePendingDelete();
   const router = useRouter();
 
   function handleDone() {
@@ -19,19 +21,21 @@ export default function DocumentsDashboard({ documents }: { documents: DocumentR
   }
 
   function handleDelete(d: DocumentRow) {
-    if (!confirm(`Delete "${d.title}"? This can't be undone.`)) return;
+    if (!confirm(`Delete "${d.title}"?`)) return;
     setError(null);
-    startTransition(async () => {
-      try {
-        const result = await deleteDocument(d.id);
-        if (result.error) {
-          setError(result.error);
-          return;
+    startDelete(d.id, () => {
+      startTransition(async () => {
+        try {
+          const result = await deleteDocument(d.id);
+          if (result.error) {
+            setError(result.error);
+            return;
+          }
+          router.refresh();
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Delete failed — please try again.");
         }
-        router.refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Delete failed — please try again.");
-      }
+      });
     });
   }
 
@@ -70,7 +74,7 @@ export default function DocumentsDashboard({ documents }: { documents: DocumentR
           </thead>
           <tbody>
             {documents.map((d) => (
-              <tr key={d.id}>
+              <tr key={d.id} style={pendingDeleteId === d.id ? { opacity: 0.5 } : undefined}>
                 <td>{d.title}</td>
                 <td>{documentCategoryLabel(d.category)}</td>
                 <td>
@@ -80,20 +84,31 @@ export default function DocumentsDashboard({ documents }: { documents: DocumentR
                 </td>
                 <td>{d.published ? "Published" : "Draft"}</td>
                 <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    style={{ marginRight: 6 }}
-                    onClick={() => setEditing(d)}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => handleDelete(d)}
-                    disabled={pending}
-                  >
-                    Delete
-                  </button>
+                  {pendingDeleteId === d.id ? (
+                    <span style={{ fontSize: 13, color: "var(--ink-soft)" }}>
+                      Deleting…{" "}
+                      <button className="btn btn-ghost btn-sm" onClick={cancelDelete}>
+                        Undo
+                      </button>
+                    </span>
+                  ) : (
+                    <>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        style={{ marginRight: 6 }}
+                        onClick={() => setEditing(d)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => handleDelete(d)}
+                        disabled={pending}
+                      >
+                        Delete
+                      </button>
+                    </>
+                  )}
                 </td>
               </tr>
             ))}

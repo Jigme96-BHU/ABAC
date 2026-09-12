@@ -13,6 +13,7 @@ import {
 import { downloadCsv, type CsvColumn } from "@/lib/csv";
 import { formatMemberNo, formatDate } from "@/lib/member-number";
 import { serviceTypeLabel } from "@/lib/service-types";
+import { usePendingDelete } from "@/lib/usePendingDelete";
 import type { MemberRow } from "@/lib/supabase/types";
 
 function memberNo(m: MemberRow): string {
@@ -91,6 +92,7 @@ function MemberSearchView({
   const [error, setError] = useState<string | null>(null);
   const [resendMessage, setResendMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const { pendingId: pendingDeleteId, start: startDelete, cancel: cancelDelete } = usePendingDelete();
 
   function runSearch(e: FormEvent) {
     e.preventDefault();
@@ -146,19 +148,22 @@ function MemberSearchView({
   }
 
   function handleDelete(m: MemberRow) {
-    if (!confirm(`Delete ${m.name}'s membership record permanently? This can't be undone.`)) return;
-    startTransition(async () => {
-      try {
-        const res = await deleteMember(m.id);
-        if (res.error) {
-          setError(res.error);
-          return;
+    if (!confirm(`Delete ${m.name}'s membership record permanently?`)) return;
+    setError(null);
+    startDelete(m.id, () => {
+      startTransition(async () => {
+        try {
+          const res = await deleteMember(m.id);
+          if (res.error) {
+            setError(res.error);
+            return;
+          }
+          setResults((prev) => prev.filter((r) => r.id !== m.id));
+          if (detail?.member.id === m.id) setDetail(null);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Delete failed — please try again.");
         }
-        setResults((prev) => prev.filter((r) => r.id !== m.id));
-        if (detail?.member.id === m.id) setDetail(null);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Delete failed — please try again.");
-      }
+      });
     });
   }
 
@@ -189,8 +194,10 @@ function MemberSearchView({
           onClose={() => setDetail(null)}
           onResend={handleResend}
           onDelete={handleDelete}
+          onCancelDelete={cancelDelete}
           resendMessage={resendMessage}
           pending={pending}
+          pendingDeleteId={pendingDeleteId}
         />
       ) : results.length > 0 ? (
         <>
@@ -212,19 +219,30 @@ function MemberSearchView({
           </thead>
           <tbody>
             {results.map((m) => (
-              <tr key={m.id}>
+              <tr key={m.id} style={pendingDeleteId === m.id ? { opacity: 0.5 } : undefined}>
                 <td>{memberNo(m)}</td>
                 <td>{m.name}</td>
                 <td>{m.email}</td>
                 <td>{m.membership_type === "family" ? "Family" : "Single"}{m.is_dependent ? " (dependent)" : ""}</td>
                 <td>{statusLabel(m)}</td>
                 <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                  <button className="btn btn-ghost btn-sm" style={{ marginRight: 6 }} onClick={() => openDetail(m.id)} disabled={pending}>
-                    View
-                  </button>
-                  <button className="btn btn-ghost btn-sm" onClick={() => handleDelete(m)} disabled={pending}>
-                    Delete
-                  </button>
+                  {pendingDeleteId === m.id ? (
+                    <span style={{ fontSize: 13, color: "var(--ink-soft)" }}>
+                      Deleting…{" "}
+                      <button className="btn btn-ghost btn-sm" onClick={cancelDelete}>
+                        Undo
+                      </button>
+                    </span>
+                  ) : (
+                    <>
+                      <button className="btn btn-ghost btn-sm" style={{ marginRight: 6 }} onClick={() => openDetail(m.id)} disabled={pending}>
+                        View
+                      </button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => handleDelete(m)} disabled={pending}>
+                        Delete
+                      </button>
+                    </>
+                  )}
                 </td>
               </tr>
             ))}
@@ -247,15 +265,19 @@ function MemberDetailPanel({
   onClose,
   onResend,
   onDelete,
+  onCancelDelete,
   resendMessage,
   pending,
+  pendingDeleteId,
 }: {
   detail: MemberDetail;
   onClose: () => void;
   onResend: (memberId: string) => void;
   onDelete: (member: MemberRow) => void;
+  onCancelDelete: () => void;
   resendMessage: string | null;
   pending: boolean;
+  pendingDeleteId: string | null;
 }) {
   const { member, household, servicesAvailed } = detail;
 
@@ -341,9 +363,18 @@ function MemberDetailPanel({
             Resend confirmation email
           </button>
         )}
-        <button className="btn btn-ghost btn-sm" style={{ color: "#c33" }} onClick={() => onDelete(member)} disabled={pending}>
-          Delete member
-        </button>
+        {pendingDeleteId === member.id ? (
+          <span style={{ fontSize: 13, color: "var(--ink-soft)" }}>
+            Deleting…{" "}
+            <button className="btn btn-ghost btn-sm" onClick={onCancelDelete}>
+              Undo
+            </button>
+          </span>
+        ) : (
+          <button className="btn btn-ghost btn-sm" style={{ color: "#c33" }} onClick={() => onDelete(member)} disabled={pending}>
+            Delete member
+          </button>
+        )}
         {resendMessage && (
           <span style={{ fontSize: 13, color: "var(--ink-soft)" }}>{resendMessage}</span>
         )}
