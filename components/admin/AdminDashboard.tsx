@@ -43,10 +43,15 @@ export default function AdminDashboard({ events }: { events: EventRow[] }) {
       setRsvpEventId(null);
       return;
     }
+    setError(null);
     startTransition(async () => {
-      const result = await getEventRsvps(ev.id);
-      setRsvps(result.rsvps);
-      setRsvpEventId(ev.id);
+      try {
+        const result = await getEventRsvps(ev.id);
+        setRsvps(result.rsvps);
+        setRsvpEventId(ev.id);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Couldn't load RSVPs — please try again.");
+      }
     });
   }
 

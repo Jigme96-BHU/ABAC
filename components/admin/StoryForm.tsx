@@ -52,19 +52,25 @@ export default function StoryForm({
       setGallery([]);
       return;
     }
-    getStoryImages(editing.id).then((result) => setGallery(result.images));
+    getStoryImages(editing.id)
+      .then((result) => setGallery(result.images))
+      .catch(() => setGallery([]));
   }, [editing]);
 
   function handleDeleteImage(img: GalleryImage) {
     if (!editing) return;
     if (!confirm("Remove this photo from the story?")) return;
     startGalleryTransition(async () => {
-      const result = await deleteStoryImage(img.id, editing.id);
-      if (result.error) {
-        setError(result.error);
-        return;
+      try {
+        const result = await deleteStoryImage(img.id, editing.id);
+        if (result.error) {
+          setError(result.error);
+          return;
+        }
+        setGallery((prev) => prev.filter((g) => g.id !== img.id));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Delete failed — please try again.");
       }
-      setGallery((prev) => prev.filter((g) => g.id !== img.id));
     });
   }
 
@@ -75,75 +81,80 @@ export default function StoryForm({
     const formData = new FormData(e.currentTarget);
 
     startTransition(async () => {
-      const browserSupabase = createClient();
+      try {
+        const browserSupabase = createClient();
 
-      // Both video and photos go straight to Storage from the browser —
-      // routing a real phone-camera photo (routinely 2-8MB) or a video
-      // through this form's own submit hits Next.js's 1MB default
-      // server-action request-body limit and fails silently.
-      const images = formData.getAll("images").filter((f): f is File => f instanceof File && f.size > 0);
-      if (images.length > 0) {
-        setUploadStatus(images.length === 1 ? "Uploading photo…" : `Uploading photos (0/${images.length})…`);
-        const uploadUrls = await createStoryImageUploadUrls(images.map((f) => f.type));
-        if (uploadUrls.error) {
-          setError(uploadUrls.error);
-          setUploadStatus(null);
-          return;
+        // Both video and photos go straight to Storage from the browser —
+        // routing a real phone-camera photo (routinely 2-8MB) or a video
+        // through this form's own submit hits Next.js's 1MB default
+        // server-action request-body limit and fails silently.
+        const images = formData.getAll("images").filter((f): f is File => f instanceof File && f.size > 0);
+        if (images.length > 0) {
+          setUploadStatus(images.length === 1 ? "Uploading photo…" : `Uploading photos (0/${images.length})…`);
+          const uploadUrls = await createStoryImageUploadUrls(images.map((f) => f.type));
+          if (uploadUrls.error) {
+            setError(uploadUrls.error);
+            setUploadStatus(null);
+            return;
+          }
+
+          const uploaded: { path: string; width: number | null; height: number | null }[] = [];
+          for (let i = 0; i < images.length; i++) {
+            const uploadUrl = uploadUrls.results[i];
+            if (uploadUrl.error || !uploadUrl.path || !uploadUrl.token) {
+              setError(uploadUrl.error ?? `Couldn't prepare photo ${i + 1} for upload.`);
+              setUploadStatus(null);
+              return;
+            }
+            setUploadStatus(`Uploading photos (${i + 1}/${images.length})…`);
+            const dimensions = await readImageDimensions(images[i]);
+            const { error: putError } = await browserSupabase.storage
+              .from("story-images")
+              .uploadToSignedUrl(uploadUrl.path, uploadUrl.token, images[i]);
+            if (putError) {
+              setError(`Couldn't upload photo ${i + 1}: ${putError.message}`);
+              setUploadStatus(null);
+              return;
+            }
+            uploaded.push({ path: uploadUrl.path, ...dimensions });
+          }
+          formData.set("uploaded_images", JSON.stringify(uploaded));
         }
+        formData.delete("images");
 
-        const uploaded: { path: string; width: number | null; height: number | null }[] = [];
-        for (let i = 0; i < images.length; i++) {
-          const uploadUrl = uploadUrls.results[i];
+        const video = formData.get("video");
+        if (video instanceof File && video.size > 0) {
+          setUploadStatus("Uploading video…");
+          const uploadUrl = await createStoryVideoUploadUrl(video.type);
           if (uploadUrl.error || !uploadUrl.path || !uploadUrl.token) {
-            setError(uploadUrl.error ?? `Couldn't prepare photo ${i + 1} for upload.`);
+            setError(uploadUrl.error ?? "Couldn't prepare the video for upload.");
             setUploadStatus(null);
             return;
           }
-          setUploadStatus(`Uploading photos (${i + 1}/${images.length})…`);
-          const dimensions = await readImageDimensions(images[i]);
           const { error: putError } = await browserSupabase.storage
-            .from("story-images")
-            .uploadToSignedUrl(uploadUrl.path, uploadUrl.token, images[i]);
+            .from("story-videos")
+            .uploadToSignedUrl(uploadUrl.path, uploadUrl.token, video);
           if (putError) {
-            setError(`Couldn't upload photo ${i + 1}: ${putError.message}`);
+            setError(`Couldn't upload the video: ${putError.message}`);
             setUploadStatus(null);
             return;
           }
-          uploaded.push({ path: uploadUrl.path, ...dimensions });
+          formData.set("video_path", uploadUrl.path);
+          formData.set("video_size", String(video.size));
         }
-        formData.set("uploaded_images", JSON.stringify(uploaded));
-      }
-      formData.delete("images");
+        formData.delete("video");
+        setUploadStatus(null);
 
-      const video = formData.get("video");
-      if (video instanceof File && video.size > 0) {
-        setUploadStatus("Uploading video…");
-        const uploadUrl = await createStoryVideoUploadUrl(video.type);
-        if (uploadUrl.error || !uploadUrl.path || !uploadUrl.token) {
-          setError(uploadUrl.error ?? "Couldn't prepare the video for upload.");
-          setUploadStatus(null);
+        const result = editing ? await updateStory(editing.id, formData) : await createStory(formData);
+        if (result.error) {
+          setError(result.error);
           return;
         }
-        const { error: putError } = await browserSupabase.storage
-          .from("story-videos")
-          .uploadToSignedUrl(uploadUrl.path, uploadUrl.token, video);
-        if (putError) {
-          setError(`Couldn't upload the video: ${putError.message}`);
-          setUploadStatus(null);
-          return;
-        }
-        formData.set("video_path", uploadUrl.path);
-        formData.set("video_size", String(video.size));
+        onDone();
+      } catch (err) {
+        setUploadStatus(null);
+        setError(err instanceof Error ? err.message : "Save failed — please try again.");
       }
-      formData.delete("video");
-      setUploadStatus(null);
-
-      const result = editing ? await updateStory(editing.id, formData) : await createStory(formData);
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
-      onDone();
     });
   }
 

@@ -33,41 +33,46 @@ export default function TeamMemberForm({
     const formData = new FormData(e.currentTarget);
 
     startTransition(async () => {
-      // Straight to Storage from the browser — a real phone-camera photo
-      // routinely exceeds Next.js's 1MB default server-action
-      // request-body limit, so routing it through this form's own submit
-      // failed silently.
-      const photo = formData.get("photo");
-      if (photo instanceof File && photo.size > 0) {
-        setUploadStatus("Uploading…");
-        const uploadUrl = await createTeamPhotoUploadUrl(photo.type);
-        if (uploadUrl.error || !uploadUrl.path || !uploadUrl.token) {
-          setError(uploadUrl.error ?? "Couldn't prepare that photo for upload.");
-          setUploadStatus(null);
-          return;
+      try {
+        // Straight to Storage from the browser — a real phone-camera photo
+        // routinely exceeds Next.js's 1MB default server-action
+        // request-body limit, so routing it through this form's own submit
+        // failed silently.
+        const photo = formData.get("photo");
+        if (photo instanceof File && photo.size > 0) {
+          setUploadStatus("Uploading…");
+          const uploadUrl = await createTeamPhotoUploadUrl(photo.type);
+          if (uploadUrl.error || !uploadUrl.path || !uploadUrl.token) {
+            setError(uploadUrl.error ?? "Couldn't prepare that photo for upload.");
+            setUploadStatus(null);
+            return;
+          }
+          const browserSupabase = createClient();
+          const { error: putError } = await browserSupabase.storage
+            .from("team-photos")
+            .uploadToSignedUrl(uploadUrl.path, uploadUrl.token, photo);
+          if (putError) {
+            setError(`Couldn't upload the photo: ${putError.message}`);
+            setUploadStatus(null);
+            return;
+          }
+          formData.set("photo_path", uploadUrl.path);
         }
-        const browserSupabase = createClient();
-        const { error: putError } = await browserSupabase.storage
-          .from("team-photos")
-          .uploadToSignedUrl(uploadUrl.path, uploadUrl.token, photo);
-        if (putError) {
-          setError(`Couldn't upload the photo: ${putError.message}`);
-          setUploadStatus(null);
-          return;
-        }
-        formData.set("photo_path", uploadUrl.path);
-      }
-      formData.delete("photo");
-      setUploadStatus(null);
+        formData.delete("photo");
+        setUploadStatus(null);
 
-      const result = editing
-        ? await updateTeamMember(editing.id, formData)
-        : await createTeamMember(formData);
-      if (result.error) {
-        setError(result.error);
-        return;
+        const result = editing
+          ? await updateTeamMember(editing.id, formData)
+          : await createTeamMember(formData);
+        if (result.error) {
+          setError(result.error);
+          return;
+        }
+        onDone();
+      } catch (err) {
+        setUploadStatus(null);
+        setError(err instanceof Error ? err.message : "Save failed — please try again.");
       }
-      onDone();
     });
   }
 

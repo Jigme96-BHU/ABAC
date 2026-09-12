@@ -60,12 +60,16 @@ function VolunteerSearchView() {
     e.preventDefault();
     setError(null);
     startTransition(async () => {
-      const res = await searchVolunteers(query);
-      if (res.error) {
-        setError(res.error);
-        return;
+      try {
+        const res = await searchVolunteers(query);
+        if (res.error) {
+          setError(res.error);
+          return;
+        }
+        setResults(res.results);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Search failed — please try again.");
       }
-      setResults(res.results);
     });
   }
 

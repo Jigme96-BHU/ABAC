@@ -7,8 +7,13 @@ export default function SignOutButton() {
   const router = useRouter();
 
   async function handleSignOut() {
-    const supabase = createClient();
-    await supabase.auth.signOut();
+    try {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+    } catch {
+      // Best-effort — the session cookie may already be gone; refreshing
+      // still gets the admin back to a sane state either way.
+    }
     router.refresh();
   }
 

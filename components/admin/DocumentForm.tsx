@@ -25,41 +25,46 @@ export default function DocumentForm({
     const formData = new FormData(e.currentTarget);
 
     startTransition(async () => {
-      // Straight to Storage from the browser — a real scanned or
-      // multi-page PDF routinely exceeds Next.js's 1MB default
-      // server-action request-body limit, so routing it through this
-      // form's own submit fails silently.
-      const file = formData.get("file");
-      if (file instanceof File && file.size > 0) {
-        setUploadStatus("Uploading…");
-        const uploadUrl = await createDocumentUploadUrl(file.type);
-        if (uploadUrl.error || !uploadUrl.path || !uploadUrl.token) {
-          setError(uploadUrl.error ?? "Couldn't prepare that file for upload.");
-          setUploadStatus(null);
-          return;
+      try {
+        // Straight to Storage from the browser — a real scanned or
+        // multi-page PDF routinely exceeds Next.js's 1MB default
+        // server-action request-body limit, so routing it through this
+        // form's own submit fails silently.
+        const file = formData.get("file");
+        if (file instanceof File && file.size > 0) {
+          setUploadStatus("Uploading…");
+          const uploadUrl = await createDocumentUploadUrl(file.type);
+          if (uploadUrl.error || !uploadUrl.path || !uploadUrl.token) {
+            setError(uploadUrl.error ?? "Couldn't prepare that file for upload.");
+            setUploadStatus(null);
+            return;
+          }
+          const browserSupabase = createClient();
+          const { error: putError } = await browserSupabase.storage
+            .from("documents")
+            .uploadToSignedUrl(uploadUrl.path, uploadUrl.token, file);
+          if (putError) {
+            setError(`Couldn't upload the file: ${putError.message}`);
+            setUploadStatus(null);
+            return;
+          }
+          formData.set("file_path", uploadUrl.path);
+          formData.set("file_name", file.name);
+          formData.set("file_size", String(file.size));
         }
-        const browserSupabase = createClient();
-        const { error: putError } = await browserSupabase.storage
-          .from("documents")
-          .uploadToSignedUrl(uploadUrl.path, uploadUrl.token, file);
-        if (putError) {
-          setError(`Couldn't upload the file: ${putError.message}`);
-          setUploadStatus(null);
-          return;
-        }
-        formData.set("file_path", uploadUrl.path);
-        formData.set("file_name", file.name);
-        formData.set("file_size", String(file.size));
-      }
-      formData.delete("file");
-      setUploadStatus(null);
+        formData.delete("file");
+        setUploadStatus(null);
 
-      const result = editing ? await updateDocument(editing.id, formData) : await createDocument(formData);
-      if (result.error) {
-        setError(result.error);
-        return;
+        const result = editing ? await updateDocument(editing.id, formData) : await createDocument(formData);
+        if (result.error) {
+          setError(result.error);
+          return;
+        }
+        onDone();
+      } catch (err) {
+        setUploadStatus(null);
+        setError(err instanceof Error ? err.message : "Save failed — please try again.");
       }
-      onDone();
     });
   }
 

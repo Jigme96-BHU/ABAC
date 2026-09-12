@@ -78,12 +78,16 @@ function ServiceSearchView() {
     e.preventDefault();
     setError(null);
     startTransition(async () => {
-      const res = await searchServiceRequests(query);
-      if (res.error) {
-        setError(res.error);
-        return;
+      try {
+        const res = await searchServiceRequests(query);
+        if (res.error) {
+          setError(res.error);
+          return;
+        }
+        setResults(res.results);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Search failed — please try again.");
       }
-      setResults(res.results);
     });
   }
 
@@ -242,13 +246,18 @@ function ActionTakenCell({ request, onChanged }: { request: ServiceRequestRow; o
     setError(null);
     setSavingStatus(actionStatus);
     startTransition(async () => {
-      const result = await updateServiceAction(request.id, actionStatus, comment);
-      setSavingStatus(null);
-      if (result.error) {
-        setError(result.error);
-        return;
+      try {
+        const result = await updateServiceAction(request.id, actionStatus, comment);
+        if (result.error) {
+          setError(result.error);
+          return;
+        }
+        onChanged();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Save failed — please try again.");
+      } finally {
+        setSavingStatus(null);
       }
-      onChanged();
     });
   }
 
@@ -256,13 +265,18 @@ function ActionTakenCell({ request, onChanged }: { request: ServiceRequestRow; o
     setError(null);
     setSavingComment(true);
     startTransition(async () => {
-      const result = await updateServiceAction(request.id, request.action_status, comment);
-      setSavingComment(false);
-      if (result.error) {
-        setError(result.error);
-        return;
+      try {
+        const result = await updateServiceAction(request.id, request.action_status, comment);
+        if (result.error) {
+          setError(result.error);
+          return;
+        }
+        onChanged();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Save failed — please try again.");
+      } finally {
+        setSavingComment(false);
       }
-      onChanged();
     });
   }
 
@@ -327,17 +341,21 @@ function ServiceExportView() {
   function runExport() {
     setMessage(null);
     startTransition(async () => {
-      const res = await getServiceRequestsForExport(filter);
-      if (res.error) {
-        setMessage(`Couldn't export: ${res.error}`);
-        return;
+      try {
+        const res = await getServiceRequestsForExport(filter);
+        if (res.error) {
+          setMessage(`Couldn't export: ${res.error}`);
+          return;
+        }
+        if (res.rows.length === 0) {
+          setMessage("No service requests match those filters.");
+          return;
+        }
+        downloadCsv(res.rows, EXPORT_COLUMNS, "abac-service-requests");
+        setMessage(`Exported ${res.rows.length} service requests.`);
+      } catch (err) {
+        setMessage(`Couldn't export: ${err instanceof Error ? err.message : "please try again."}`);
       }
-      if (res.rows.length === 0) {
-        setMessage("No service requests match those filters.");
-        return;
-      }
-      downloadCsv(res.rows, EXPORT_COLUMNS, "abac-service-requests");
-      setMessage(`Exported ${res.rows.length} service requests.`);
     });
   }
 

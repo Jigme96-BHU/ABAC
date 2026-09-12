@@ -360,17 +360,21 @@ function MemberBulkExportView() {
   function runExport() {
     setMessage(null);
     startTransition(async () => {
-      const res = await getMembersForExport(filter);
-      if (res.error) {
-        setMessage(`Couldn't export: ${res.error}`);
-        return;
+      try {
+        const res = await getMembersForExport(filter);
+        if (res.error) {
+          setMessage(`Couldn't export: ${res.error}`);
+          return;
+        }
+        if (res.rows.length === 0) {
+          setMessage("No members match those filters.");
+          return;
+        }
+        downloadCsv(res.rows, EXPORT_COLUMNS, "abac-members");
+        setMessage(`Exported ${res.rows.length} members.`);
+      } catch (err) {
+        setMessage(`Couldn't export: ${err instanceof Error ? err.message : "please try again."}`);
       }
-      if (res.rows.length === 0) {
-        setMessage("No members match those filters.");
-        return;
-      }
-      downloadCsv(res.rows, EXPORT_COLUMNS, "abac-members");
-      setMessage(`Exported ${res.rows.length} members.`);
     });
   }
 
