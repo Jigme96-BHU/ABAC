@@ -880,12 +880,6 @@ const EMAIL_ATTACHMENT_EXT_BY_TYPE: Record<string, string> = {
   "image/gif": "gif",
 };
 
-/** 5MB per file — an attachment here goes out to every filtered recipient,
- *  potentially hundreds of people, so this stays tighter than the
- *  single-recipient upload caps used elsewhere in this project. Enforced
- *  client-side (BulkEmailForm.tsx) before upload starts, and re-checked
- *  here since a tampered client could otherwise skip the check. */
-export const EMAIL_ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024;
 
 /** Direct-to-storage upload, step 1 — the email-attachments bucket's
  *  insert policy is admin-gated (0028_email_attachments_admin_only.sql),
