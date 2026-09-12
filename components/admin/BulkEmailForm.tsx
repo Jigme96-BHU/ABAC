@@ -6,9 +6,9 @@ import {
   searchMembers,
   searchCorporateMembers,
   createEmailAttachmentUploadUrl,
-  EMAIL_ATTACHMENT_MAX_BYTES,
   type BulkEmailFilter,
 } from "@/app/admin/actions";
+import { EMAIL_ATTACHMENT_MAX_BYTES } from "@/lib/email-attachments";
 import { createClient } from "@/lib/supabase/client";
 
 type IndividualRecipient = { id: string; name: string; email: string };
