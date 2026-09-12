@@ -150,55 +150,81 @@ function CorporateTable({ members }: { members: CorporateMemberRow[] }) {
       return;
     }
     startTransition(async () => {
-      // Straight to Storage from the browser — a high-res logo export can
-      // exceed Next.js's 1MB default server-action request-body limit.
-      const uploadUrl = await createAdminCorporateLogoUploadUrl(file.type);
-      if (uploadUrl.error || !uploadUrl.path || !uploadUrl.token) {
-        setRowError((prev) => ({ ...prev, [id]: uploadUrl.error ?? "Couldn't prepare that file for upload." }));
-        return;
+      try {
+        // Straight to Storage from the browser — a high-res logo export can
+        // exceed Next.js's 1MB default server-action request-body limit.
+        const uploadUrl = await createAdminCorporateLogoUploadUrl(file.type);
+        if (uploadUrl.error || !uploadUrl.path || !uploadUrl.token) {
+          setRowError((prev) => ({ ...prev, [id]: uploadUrl.error ?? "Couldn't prepare that file for upload." }));
+          return;
+        }
+        const browserSupabase = createClient();
+        const { error: putError } = await browserSupabase.storage
+          .from("corporate-logos")
+          .uploadToSignedUrl(uploadUrl.path, uploadUrl.token, file);
+        if (putError) {
+          setRowError((prev) => ({ ...prev, [id]: `Couldn't upload the logo: ${putError.message}` }));
+          return;
+        }
+        const result = await recordCorporateLogo(id, uploadUrl.path);
+        if (result.error) {
+          setRowError((prev) => ({ ...prev, [id]: result.error! }));
+          return;
+        }
+        router.refresh();
+      } catch (err) {
+        setRowError((prev) => ({ ...prev, [id]: err instanceof Error ? err.message : "Upload failed — please try again." }));
       }
-      const browserSupabase = createClient();
-      const { error: putError } = await browserSupabase.storage
-        .from("corporate-logos")
-        .uploadToSignedUrl(uploadUrl.path, uploadUrl.token, file);
-      if (putError) {
-        setRowError((prev) => ({ ...prev, [id]: `Couldn't upload the logo: ${putError.message}` }));
-        return;
-      }
-      const result = await recordCorporateLogo(id, uploadUrl.path);
-      if (result.error) setRowError((prev) => ({ ...prev, [id]: result.error! }));
-      router.refresh();
     });
   }
 
   function handleRemoveLogo(id: string) {
     clearRowError(id);
     startTransition(async () => {
-      const result = await removeCorporateLogo(id);
-      if (result.error) setRowError((prev) => ({ ...prev, [id]: result.error! }));
-      router.refresh();
+      try {
+        const result = await removeCorporateLogo(id);
+        if (result.error) {
+          setRowError((prev) => ({ ...prev, [id]: result.error! }));
+          return;
+        }
+        router.refresh();
+      } catch (err) {
+        setRowError((prev) => ({ ...prev, [id]: err instanceof Error ? err.message : "Remove failed — please try again." }));
+      }
     });
   }
 
   function handleToggleHidden(m: CorporateMemberRow) {
     clearRowError(m.id);
     startTransition(async () => {
-      const result = await hideCorporatePartner(m.id, !m.hidden_from_partners);
-      if (result.error) setRowError((prev) => ({ ...prev, [m.id]: result.error! }));
-      router.refresh();
+      try {
+        const result = await hideCorporatePartner(m.id, !m.hidden_from_partners);
+        if (result.error) {
+          setRowError((prev) => ({ ...prev, [m.id]: result.error! }));
+          return;
+        }
+        router.refresh();
+      } catch (err) {
+        setRowError((prev) => ({ ...prev, [m.id]: err instanceof Error ? err.message : "Save failed — please try again." }));
+      }
     });
   }
 
   function handleViewCertificate(path: string) {
     setBusyPath(path);
     startTransition(async () => {
-      const result = await getSignedDocumentUrl("corporate-documents", path);
-      setBusyPath(null);
-      if (result.error || !result.url) {
-        alert(`Couldn't open that document: ${result.error ?? "unknown error"}`);
-        return;
+      try {
+        const result = await getSignedDocumentUrl("corporate-documents", path);
+        if (result.error || !result.url) {
+          alert(`Couldn't open that document: ${result.error ?? "unknown error"}`);
+          return;
+        }
+        window.open(result.url, "_blank", "noopener");
+      } catch (err) {
+        alert(`Couldn't open that document: ${err instanceof Error ? err.message : "please try again."}`);
+      } finally {
+        setBusyPath(null);
       }
-      window.open(result.url, "_blank", "noopener");
     });
   }
 
@@ -321,12 +347,16 @@ function CorporateSearchView() {
     e.preventDefault();
     setError(null);
     startTransition(async () => {
-      const res = await searchCorporateMembers(query);
-      if (res.error) {
-        setError(res.error);
-        return;
+      try {
+        const res = await searchCorporateMembers(query);
+        if (res.error) {
+          setError(res.error);
+          return;
+        }
+        setResults(res.results);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Search failed — please try again.");
       }
-      setResults(res.results);
     });
   }
 
@@ -366,13 +396,17 @@ function CorporateAddForm({ onDone }: { onDone: () => void }) {
     const formData = new FormData(e.currentTarget);
     formData.set("tier", tier);
     startTransition(async () => {
-      const result = await createCorporateMemberManually(formData);
-      if (result.error) {
-        setError(result.error);
-        return;
+      try {
+        const result = await createCorporateMemberManually(formData);
+        if (result.error) {
+          setError(result.error);
+          return;
+        }
+        router.refresh();
+        onDone();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Save failed — please try again.");
       }
-      router.refresh();
-      onDone();
     });
   }
 
@@ -471,17 +505,21 @@ function CorporateExportView() {
   function runExport() {
     setMessage(null);
     startTransition(async () => {
-      const res = await getCorporateMembersForExport(filter);
-      if (res.error) {
-        setMessage(`Couldn't export: ${res.error}`);
-        return;
+      try {
+        const res = await getCorporateMembersForExport(filter);
+        if (res.error) {
+          setMessage(`Couldn't export: ${res.error}`);
+          return;
+        }
+        if (res.rows.length === 0) {
+          setMessage("No corporate members match those filters.");
+          return;
+        }
+        downloadCsv(res.rows, EXPORT_COLUMNS, "abac-corporate-members");
+        setMessage(`Exported ${res.rows.length} corporate members.`);
+      } catch (err) {
+        setMessage(`Couldn't export: ${err instanceof Error ? err.message : "please try again."}`);
       }
-      if (res.rows.length === 0) {
-        setMessage("No corporate members match those filters.");
-        return;
-      }
-      downloadCsv(res.rows, EXPORT_COLUMNS, "abac-corporate-members");
-      setMessage(`Exported ${res.rows.length} corporate members.`);
     });
   }
 

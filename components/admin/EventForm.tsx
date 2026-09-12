@@ -47,12 +47,16 @@ export default function EventForm({
     e.preventDefault();
     setError(null);
     startTransition(async () => {
-      const result = editing ? await updateEvent(editing.id, form) : await createEvent(form);
-      if (result.error) {
-        setError(result.error);
-        return;
+      try {
+        const result = editing ? await updateEvent(editing.id, form) : await createEvent(form);
+        if (result.error) {
+          setError(result.error);
+          return;
+        }
+        onDone();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Save failed — please try again.");
       }
-      onDone();
     });
   }
 

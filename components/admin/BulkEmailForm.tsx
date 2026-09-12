@@ -63,17 +63,21 @@ export default function BulkEmailForm() {
       return;
     }
     startIndividualSearch(async () => {
-      const res =
-        filter.audience === "corporate" ? await searchCorporateMembers(q) : await searchMembers(q);
-      if (res.error) {
+      try {
+        const res =
+          filter.audience === "corporate" ? await searchCorporateMembers(q) : await searchMembers(q);
+        if (res.error) {
+          setIndividualResults([]);
+          return;
+        }
+        const normalised: IndividualRecipient[] =
+          filter.audience === "corporate"
+            ? res.results.map((m: any) => ({ id: m.id, name: m.business_name, email: m.email }))
+            : res.results.map((m: any) => ({ id: m.id, name: m.name, email: m.email }));
+        setIndividualResults(normalised.filter((r) => r.email));
+      } catch {
         setIndividualResults([]);
-        return;
       }
-      const normalised: IndividualRecipient[] =
-        filter.audience === "corporate"
-          ? res.results.map((m: any) => ({ id: m.id, name: m.business_name, email: m.email }))
-          : res.results.map((m: any) => ({ id: m.id, name: m.name, email: m.email }));
-      setIndividualResults(normalised.filter((r) => r.email));
     });
   }
 
@@ -126,51 +130,55 @@ export default function BulkEmailForm() {
     setLoading(true);
     setResult(null);
 
-    // Straight to Storage from the browser, same reason as every other
-    // upload in this project — routing files through the server action's
-    // own request body hits Next.js's 1MB default limit.
-    const uploaded: { path: string; filename: string }[] = [];
-    const browserSupabase = createClient();
-    for (let i = 0; i < attachmentFiles.length; i++) {
-      const file = attachmentFiles[i];
-      setUploadStatus(`Uploading ${file.name} (${i + 1}/${attachmentFiles.length})…`);
-      const uploadUrl = await createEmailAttachmentUploadUrl(file.type);
-      if (uploadUrl.error || !uploadUrl.path || !uploadUrl.token) {
-        setResult({ error: uploadUrl.error ?? `Couldn't prepare ${file.name} for upload.` });
-        setUploadStatus(null);
-        setLoading(false);
-        return;
+    try {
+      // Straight to Storage from the browser, same reason as every other
+      // upload in this project — routing files through the server action's
+      // own request body hits Next.js's 1MB default limit.
+      const uploaded: { path: string; filename: string }[] = [];
+      const browserSupabase = createClient();
+      for (let i = 0; i < attachmentFiles.length; i++) {
+        const file = attachmentFiles[i];
+        setUploadStatus(`Uploading ${file.name} (${i + 1}/${attachmentFiles.length})…`);
+        const uploadUrl = await createEmailAttachmentUploadUrl(file.type);
+        if (uploadUrl.error || !uploadUrl.path || !uploadUrl.token) {
+          setResult({ error: uploadUrl.error ?? `Couldn't prepare ${file.name} for upload.` });
+          setUploadStatus(null);
+          return;
+        }
+        const { error: putError } = await browserSupabase.storage
+          .from("email-attachments")
+          .uploadToSignedUrl(uploadUrl.path, uploadUrl.token, file);
+        if (putError) {
+          setResult({ error: `Couldn't upload ${file.name}: ${putError.message}` });
+          setUploadStatus(null);
+          return;
+        }
+        uploaded.push({ path: uploadUrl.path, filename: file.name });
       }
-      const { error: putError } = await browserSupabase.storage
-        .from("email-attachments")
-        .uploadToSignedUrl(uploadUrl.path, uploadUrl.token, file);
-      if (putError) {
-        setResult({ error: `Couldn't upload ${file.name}: ${putError.message}` });
-        setUploadStatus(null);
-        setLoading(false);
-        return;
+      setUploadStatus(null);
+
+      const filterWithIndividuals: BulkEmailFilter = {
+        ...filter,
+        individualMemberIds: selectedIndividuals.map((p) => p.id),
+      };
+      const res = await sendBulkEmail(subject, message, filterWithIndividuals, uploaded);
+
+      if (res.error) {
+        setResult({ error: res.error });
+      } else {
+        setResult({ success: `Email sent to ${res.recipientCount} members` });
+        setSubject("");
+        setMessage("");
+        setFilter({ audience: filter.audience, membershipTypes: ["single", "family"], includeInactive: false });
+        setAttachmentFiles([]);
+        setSelectedIndividuals([]);
       }
-      uploaded.push({ path: uploadUrl.path, filename: file.name });
+    } catch (err) {
+      setUploadStatus(null);
+      setResult({ error: err instanceof Error ? err.message : "Send failed — please try again." });
+    } finally {
+      setLoading(false);
     }
-    setUploadStatus(null);
-
-    const filterWithIndividuals: BulkEmailFilter = {
-      ...filter,
-      individualMemberIds: selectedIndividuals.map((p) => p.id),
-    };
-    const res = await sendBulkEmail(subject, message, filterWithIndividuals, uploaded);
-
-    if (res.error) {
-      setResult({ error: res.error });
-    } else {
-      setResult({ success: `Email sent to ${res.recipientCount} members` });
-      setSubject("");
-      setMessage("");
-      setFilter({ audience: filter.audience, membershipTypes: ["single", "family"], includeInactive: false });
-      setAttachmentFiles([]);
-      setSelectedIndividuals([]);
-    }
-    setLoading(false);
   };
 
   return (

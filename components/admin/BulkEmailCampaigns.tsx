@@ -16,19 +16,28 @@ type Campaign = {
 export default function BulkEmailCampaigns() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetch = async () => {
-      const res = await getBulkEmailCampaigns();
-      if (!res.error) {
-        setCampaigns(res.campaigns as Campaign[]);
+      try {
+        const res = await getBulkEmailCampaigns();
+        if (res.error) {
+          setError(res.error);
+        } else {
+          setCampaigns(res.campaigns as Campaign[]);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Couldn't load campaign history.");
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     fetch();
   }, []);
 
   if (loading) return <div>Loading campaign history...</div>;
+  if (error) return <div className="notice warn">{error}</div>;
   if (!campaigns.length) return <div style={{ color: "#666" }}>No campaigns sent yet</div>;
 
   return (

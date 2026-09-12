@@ -10,12 +10,16 @@ export default function LoginForm() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setStatus("sending");
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
-    });
-    setStatus(error ? "error" : "sent");
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+      });
+      setStatus(error ? "error" : "sent");
+    } catch {
+      setStatus("error");
+    }
   }
 
   if (status === "sent") {
