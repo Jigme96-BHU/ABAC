@@ -332,8 +332,8 @@ footer .fine{border-top:1px solid rgba(255,255,255,.15);padding-top:20px;font-si
 .admin-search{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap}
 .admin-search input,.admin-search select{flex:1;min-width:180px}
 .hist-table{width:100%;font-size:13.5px;border-collapse:collapse;margin-top:12px}
-.hist-table th{text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:1px;color:var(--ink-soft);padding:6px 0;border-bottom:1px solid var(--line)}
-.hist-table td{padding:8px 0;border-bottom:1px solid #EAE4D3}
+.hist-table th{text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:1px;color:var(--ink-soft);padding:6px 14px 6px 0;border-bottom:1px solid var(--line)}
+.hist-table td{padding:8px 14px 8px 0;border-bottom:1px solid #EAE4D3}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 :focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 
