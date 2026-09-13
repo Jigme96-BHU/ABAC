@@ -2,10 +2,11 @@
 
 import { useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { deleteVolunteer, searchVolunteers } from "@/app/admin/actions";
+import { deleteVolunteer, searchVolunteers, restoreVolunteer, getDeletedVolunteers } from "@/app/admin/actions";
 import { ageFrom } from "@/lib/validation";
 import { downloadCsv, type CsvColumn } from "@/lib/csv";
 import { usePendingDelete } from "@/lib/usePendingDelete";
+import RecentlyDeleted from "./RecentlyDeleted";
 import type { VolunteerRow } from "@/lib/supabase/types";
 
 const CSV_COLUMNS: CsvColumn<VolunteerRow>[] = [
@@ -47,6 +48,17 @@ export default function VolunteersDashboard({ volunteers }: { volunteers: Volunt
       </div>
 
       {view === "all" ? <VolunteersTable volunteers={volunteers} /> : <VolunteerSearchView />}
+
+      <RecentlyDeleted
+        fetchDeleted={async () => {
+          const res = await getDeletedVolunteers();
+          return { error: res.error, items: res.volunteers };
+        }}
+        onRestore={restoreVolunteer}
+        getLabel={(v) => v.name}
+        getDeletedAt={(v) => v.deleted_at ?? v.updated_at}
+        noun="volunteer registrations"
+      />
     </div>
   );
 }

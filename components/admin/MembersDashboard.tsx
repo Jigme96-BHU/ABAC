@@ -7,6 +7,8 @@ import {
   resendMembershipConfirmation,
   getMembersForExport,
   deleteMember,
+  restoreMember,
+  getDeletedMembers,
   type MemberDetail,
   type MembersExportFilter,
 } from "@/app/admin/actions";
@@ -14,6 +16,7 @@ import { downloadCsv, type CsvColumn } from "@/lib/csv";
 import { formatMemberNo, formatDate } from "@/lib/member-number";
 import { serviceTypeLabel } from "@/lib/service-types";
 import { usePendingDelete } from "@/lib/usePendingDelete";
+import RecentlyDeleted from "./RecentlyDeleted";
 import type { MemberRow } from "@/lib/supabase/types";
 
 function memberNo(m: MemberRow): string {
@@ -74,6 +77,17 @@ export default function MembersDashboard({
       ) : (
         <MemberBulkExportView />
       )}
+
+      <RecentlyDeleted
+        fetchDeleted={async () => {
+          const res = await getDeletedMembers();
+          return { error: res.error, items: res.members };
+        }}
+        onRestore={restoreMember}
+        getLabel={(m) => `${m.name} (${memberNo(m)})`}
+        getDeletedAt={(m) => m.deleted_at ?? m.updated_at}
+        noun="membership records"
+      />
     </div>
   );
 }

@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import {
   getServiceDocumentUrl,
   deleteServiceRequest,
+  restoreServiceRequest,
+  getDeletedServiceRequests,
   searchServiceRequests,
   updateServiceAction,
   getServiceRequestsForExport,
@@ -13,6 +15,7 @@ import {
 import { downloadCsv, type CsvColumn } from "@/lib/csv";
 import { serviceTypeLabel, SERVICE_TYPES } from "@/lib/service-types";
 import { usePendingDelete } from "@/lib/usePendingDelete";
+import RecentlyDeleted from "./RecentlyDeleted";
 import type { ServiceRequestRow } from "@/lib/supabase/types";
 
 const DOCUMENT_FIELDS: { key: keyof ServiceRequestRow; label: string }[] = [
@@ -65,6 +68,17 @@ export default function ServiceRequestsDashboard({ requests }: { requests: Servi
       ) : (
         <ServiceExportView />
       )}
+
+      <RecentlyDeleted
+        fetchDeleted={async () => {
+          const res = await getDeletedServiceRequests();
+          return { error: res.error, items: res.requests };
+        }}
+        onRestore={restoreServiceRequest}
+        getLabel={(r) => r.requester_name}
+        getDeletedAt={(r) => r.deleted_at ?? r.updated_at}
+        noun="service requests"
+      />
     </div>
   );
 }

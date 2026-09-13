@@ -16,6 +16,7 @@ export default async function DocumentsPage() {
     .from("documents")
     .select("*")
     .eq("published", true)
+    .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .returns<DocumentRow[]>();
 

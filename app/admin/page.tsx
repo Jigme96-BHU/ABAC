@@ -100,31 +100,40 @@ export default async function AdminPage() {
     teamMembersResult,
     membersResult,
   ] = await Promise.allSettled([
-    supabase.from("events").select("*").order("date", { ascending: true }).returns<EventRow[]>(),
-    supabase.from("stories").select("*").order("date", { ascending: false }).returns<StoryRow[]>(),
+    // Every query below excludes soft-deleted rows (0031_soft_delete_and_trash.sql)
+    // — a deleted row moves to that tab's "Recently deleted" panel instead
+    // (fetched on demand via getDeletedX(), not preloaded here), so it must
+    // never show up in the main list.
+    supabase.from("events").select("*").is("deleted_at", null).order("date", { ascending: true }).returns<EventRow[]>(),
+    supabase.from("stories").select("*").is("deleted_at", null).order("date", { ascending: false }).returns<StoryRow[]>(),
     supabase
       .from("documents")
       .select("*")
+      .is("deleted_at", null)
       .order("created_at", { ascending: false })
       .returns<DocumentRow[]>(),
     supabase
       .from("volunteers")
       .select("*")
+      .is("deleted_at", null)
       .order("created_at", { ascending: false })
       .returns<VolunteerRow[]>(),
     supabase
       .from("corporate_members")
       .select("*")
+      .is("deleted_at", null)
       .order("created_at", { ascending: false })
       .returns<CorporateMemberRow[]>(),
     supabase
       .from("service_requests")
       .select("*")
+      .is("deleted_at", null)
       .order("created_at", { ascending: false })
       .returns<ServiceRequestRow[]>(),
     supabase
       .from("team_members")
       .select("*")
+      .is("deleted_at", null)
       .order("category", { ascending: true })
       .order("display_order", { ascending: true })
       .returns<TeamMemberRow[]>(),
@@ -136,6 +145,7 @@ export default async function AdminPage() {
     supabase
       .from("members")
       .select("*", { count: "exact" })
+      .is("deleted_at", null)
       .order("created_at", { ascending: false })
       .limit(50)
       .returns<MemberRow[]>(),

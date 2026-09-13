@@ -8,6 +8,10 @@
     {
       "path": "/api/corporate/expiry-reminders",
       "schedule": "15 15 * * *"
+    },
+    {
+      "path": "/api/admin/purge-deleted",
+      "schedule": "30 15 * * *"
     }
   ]
 }

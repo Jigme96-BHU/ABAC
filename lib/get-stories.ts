@@ -32,6 +32,7 @@ export async function getAllStories(): Promise<Story[]> {
     .from("stories")
     .select("*")
     .eq("published", true)
+    .is("deleted_at", null)
     .order("date", { ascending: false })
     .returns<StoryRow[]>();
 

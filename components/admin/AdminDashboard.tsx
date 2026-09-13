@@ -3,7 +3,8 @@
 import { Fragment, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import EventForm from "./EventForm";
-import { deleteEvent, getEventRsvps } from "@/app/admin/actions";
+import RecentlyDeleted from "./RecentlyDeleted";
+import { deleteEvent, getEventRsvps, restoreEvent, getDeletedEvents } from "@/app/admin/actions";
 import { usePendingDelete } from "@/lib/usePendingDelete";
 import type { EventRow } from "@/lib/supabase/types";
 
@@ -173,6 +174,17 @@ export default function AdminDashboard({ events }: { events: EventRow[] }) {
           </tbody>
         </table>
       )}
+
+      <RecentlyDeleted
+        fetchDeleted={async () => {
+          const res = await getDeletedEvents();
+          return { error: res.error, items: res.events };
+        }}
+        onRestore={restoreEvent}
+        getLabel={(ev) => ev.title}
+        getDeletedAt={(ev) => ev.deleted_at ?? ev.updated_at}
+        noun="events"
+      />
     </div>
   );
 }

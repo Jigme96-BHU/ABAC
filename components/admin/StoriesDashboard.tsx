@@ -3,7 +3,8 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import StoryForm from "./StoryForm";
-import { deleteStory } from "@/app/admin/actions";
+import RecentlyDeleted from "./RecentlyDeleted";
+import { deleteStory, restoreStory, getDeletedStories } from "@/app/admin/actions";
 import { usePendingDelete } from "@/lib/usePendingDelete";
 import type { StoryRow } from "@/lib/supabase/types";
 
@@ -112,6 +113,17 @@ export default function StoriesDashboard({ stories }: { stories: StoryRow[] }) {
           </tbody>
         </table>
       )}
+
+      <RecentlyDeleted
+        fetchDeleted={async () => {
+          const res = await getDeletedStories();
+          return { error: res.error, items: res.stories };
+        }}
+        onRestore={restoreStory}
+        getLabel={(s) => s.title}
+        getDeletedAt={(s) => s.deleted_at ?? s.updated_at}
+        noun="stories"
+      />
     </div>
   );
 }

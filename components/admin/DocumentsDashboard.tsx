@@ -3,7 +3,8 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import DocumentForm from "./DocumentForm";
-import { deleteDocument } from "@/app/admin/actions";
+import RecentlyDeleted from "./RecentlyDeleted";
+import { deleteDocument, restoreDocument, getDeletedDocuments } from "@/app/admin/actions";
 import { documentCategoryLabel } from "@/lib/document-categories";
 import { usePendingDelete } from "@/lib/usePendingDelete";
 import type { DocumentRow } from "@/lib/supabase/types";
@@ -115,6 +116,17 @@ export default function DocumentsDashboard({ documents }: { documents: DocumentR
           </tbody>
         </table>
       )}
+
+      <RecentlyDeleted
+        fetchDeleted={async () => {
+          const res = await getDeletedDocuments();
+          return { error: res.error, items: res.documents };
+        }}
+        onRestore={restoreDocument}
+        getLabel={(d) => d.title}
+        getDeletedAt={(d) => d.deleted_at ?? d.updated_at}
+        noun="documents"
+      />
     </div>
   );
 }
