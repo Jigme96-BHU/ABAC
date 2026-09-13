@@ -10,41 +10,28 @@ import { welcomeEmail } from "@/lib/emails/welcome";
 import { formatMemberNo, formatDate } from "@/lib/member-number";
 import { CORPORATE_TIER_FEES_CENTS, corporateTierLabel, type CorporateTier } from "@/lib/corporate-tiers";
 import { serviceTypeLabel } from "@/lib/service-types";
-import type { MemberRow, ServiceRequestRow, CorporateMemberRow, VolunteerRow } from "@/lib/supabase/types";
+import { removeStorageObjects, storageKeyFromPublicUrl } from "@/lib/storage-cleanup";
+import type {
+  EventRow,
+  StoryRow,
+  DocumentRow,
+  TeamMemberRow,
+  MemberRow,
+  ServiceRequestRow,
+  CorporateMemberRow,
+  VolunteerRow,
+} from "@/lib/supabase/types";
 
-/** Best-effort Storage cleanup paired with a row delete — a Storage hiccup
- *  must never make "delete this row" appear to fail when the row itself is
- *  already gone, so this only ever logs, never throws or returns an error. */
-async function removeStorageObjects(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  bucket: string,
-  paths: (string | null | undefined)[]
-) {
-  const keys = paths.filter((p): p is string => !!p);
-  if (keys.length === 0) return;
-  try {
-    await supabase.storage.from(bucket).remove(keys);
-  } catch (err) {
-    console.error(`storage cleanup failed (${bucket}):`, err);
-  }
-}
-
-/** Public-bucket *_path fields store the full getPublicUrl() result, not a
- *  bare object key — this recovers the key so it can be passed to
- *  storage.remove(). Returns null for anything that isn't actually a
- *  Storage URL in this bucket, e.g. team_members' seeded local /img/...
- *  paths (0023_team_members_seed.sql), which were never uploaded to
- *  Storage and must never be "removed" from it. */
-function storageKeyFromPublicUrl(bucket: string, url: string | null | undefined): string | null {
-  if (!url) return null;
-  const marker = `/storage/v1/object/public/${bucket}/`;
-  const idx = url.indexOf(marker);
-  if (idx === -1) return null;
-  try {
-    return decodeURIComponent(url.slice(idx + marker.length));
-  } catch {
-    return null;
-  }
+/** Every tab-level delete action below soft-deletes (sets deleted_at) rather
+ *  than removing the row — see 0031_soft_delete_and_trash.sql. Storage
+ *  cleanup for those only happens later, once a row is actually purged (30
+ *  days on, if never restored) — see app/api/admin/purge-deleted/route.ts —
+ *  since deleting a file immediately would break a restore in the meantime.
+ *  deleteStoryImage below is the one exception: removing a single photo
+ *  from a story's gallery isn't one of the 8 tab-level delete buttons this
+ *  applies to, so it still deletes outright via removeStorageObjects. */
+function nowIso() {
+  return new Date().toISOString();
 }
 
 export type EventInput = {
@@ -100,10 +87,30 @@ export async function updateEvent(id: string, input: EventInput) {
 
 export async function deleteEvent(id: string) {
   const supabase = await createClient();
-  const { error } = await supabase.from("events").delete().eq("id", id);
+  const { error } = await supabase.from("events").update({ deleted_at: nowIso() }).eq("id", id);
   if (error) return { error: error.message };
   refresh();
   return { error: null };
+}
+
+export async function restoreEvent(id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("events").update({ deleted_at: null }).eq("id", id);
+  if (error) return { error: error.message };
+  refresh();
+  return { error: null };
+}
+
+export async function getDeletedEvents(): Promise<{ error: string | null; events: EventRow[] }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("events")
+    .select("*")
+    .not("deleted_at", "is", null)
+    .order("deleted_at", { ascending: false })
+    .returns<EventRow[]>();
+  if (error) return { error: error.message, events: [] };
+  return { error: null, events: data ?? [] };
 }
 
 export async function getEventRsvps(eventId: string) {
@@ -391,33 +398,30 @@ export async function updateStory(id: string, formData: FormData) {
 
 export async function deleteStory(id: string) {
   const supabase = await createClient();
-
-  // Fetched before the delete — story_images cascades away with the story
-  // row (on delete cascade), so its paths would be unrecoverable after.
-  const [{ data: story }, { data: images }] = await Promise.all([
-    supabase
-      .from("stories")
-      .select("image_path, video_path")
-      .eq("id", id)
-      .maybeSingle<{ image_path: string | null; video_path: string | null }>(),
-    supabase.from("story_images").select("path").eq("story_id", id).returns<{ path: string }[]>(),
-  ]);
-
-  const { error } = await supabase.from("stories").delete().eq("id", id);
+  const { error } = await supabase.from("stories").update({ deleted_at: nowIso() }).eq("id", id);
   if (error) return { error: error.message };
-
-  await Promise.all([
-    removeStorageObjects(supabase, "story-images", [
-      storageKeyFromPublicUrl("story-images", story?.image_path),
-      ...(images ?? []).map((img) => storageKeyFromPublicUrl("story-images", img.path)),
-    ]),
-    removeStorageObjects(supabase, "story-videos", [
-      storageKeyFromPublicUrl("story-videos", story?.video_path),
-    ]),
-  ]);
-
   refresh();
   return { error: null };
+}
+
+export async function restoreStory(id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("stories").update({ deleted_at: null }).eq("id", id);
+  if (error) return { error: error.message };
+  refresh();
+  return { error: null };
+}
+
+export async function getDeletedStories(): Promise<{ error: string | null; stories: StoryRow[] }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("stories")
+    .select("*")
+    .not("deleted_at", "is", null)
+    .order("deleted_at", { ascending: false })
+    .returns<StoryRow[]>();
+  if (error) return { error: error.message, stories: [] };
+  return { error: null, stories: data ?? [] };
 }
 
 export async function getStoryImages(storyId: string) {
@@ -523,22 +527,32 @@ export async function updateDocument(id: string, formData: FormData) {
 
 export async function deleteDocument(id: string) {
   const supabase = await createClient();
-  const { data: doc } = await supabase
-    .from("documents")
-    .select("file_path")
-    .eq("id", id)
-    .maybeSingle<{ file_path: string }>();
-
-  const { error } = await supabase.from("documents").delete().eq("id", id);
+  const { error } = await supabase.from("documents").update({ deleted_at: nowIso() }).eq("id", id);
   if (error) return { error: error.message };
-
-  await removeStorageObjects(supabase, "documents", [
-    storageKeyFromPublicUrl("documents", doc?.file_path),
-  ]);
-
   refresh();
   revalidatePath("/documents");
   return { error: null };
+}
+
+export async function restoreDocument(id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("documents").update({ deleted_at: null }).eq("id", id);
+  if (error) return { error: error.message };
+  refresh();
+  revalidatePath("/documents");
+  return { error: null };
+}
+
+export async function getDeletedDocuments(): Promise<{ error: string | null; documents: DocumentRow[] }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("documents")
+    .select("*")
+    .not("deleted_at", "is", null)
+    .order("deleted_at", { ascending: false })
+    .returns<DocumentRow[]>();
+  if (error) return { error: error.message, documents: [] };
+  return { error: null, documents: data ?? [] };
 }
 
 // ---------------------------------------------------------------------------
@@ -548,10 +562,30 @@ export async function deleteDocument(id: string) {
 
 export async function deleteVolunteer(id: string) {
   const supabase = await createClient();
-  const { error } = await supabase.from("volunteers").delete().eq("id", id);
+  const { error } = await supabase.from("volunteers").update({ deleted_at: nowIso() }).eq("id", id);
   if (error) return { error: error.message };
   revalidatePath("/admin");
   return { error: null };
+}
+
+export async function restoreVolunteer(id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("volunteers").update({ deleted_at: null }).eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath("/admin");
+  return { error: null };
+}
+
+export async function getDeletedVolunteers(): Promise<{ error: string | null; volunteers: VolunteerRow[] }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("volunteers")
+    .select("*")
+    .not("deleted_at", "is", null)
+    .order("deleted_at", { ascending: false })
+    .returns<VolunteerRow[]>();
+  if (error) return { error: error.message, volunteers: [] };
+  return { error: null, volunteers: data ?? [] };
 }
 
 /** Same parallel-lookups-merged-by-id shape used for Members/Corporate
@@ -566,13 +600,13 @@ export async function searchVolunteers(query: string): Promise<{ error: string |
   const digitsOnly = q.replace(/\D/g, "");
 
   const lookups = [
-    supabase.from("volunteers").select("*").ilike("name", `%${escaped}%`).limit(50).returns<VolunteerRow[]>(),
-    supabase.from("volunteers").select("*").ilike("email", `%${escaped}%`).limit(50).returns<VolunteerRow[]>(),
+    supabase.from("volunteers").select("*").is("deleted_at", null).ilike("name", `%${escaped}%`).limit(50).returns<VolunteerRow[]>(),
+    supabase.from("volunteers").select("*").is("deleted_at", null).ilike("email", `%${escaped}%`).limit(50).returns<VolunteerRow[]>(),
   ];
   if (digitsOnly) {
     lookups.push(
-      supabase.from("volunteers").select("*").ilike("cid", `%${digitsOnly}%`).limit(50).returns<VolunteerRow[]>(),
-      supabase.from("volunteers").select("*").ilike("phone", `%${digitsOnly}%`).limit(50).returns<VolunteerRow[]>()
+      supabase.from("volunteers").select("*").is("deleted_at", null).ilike("cid", `%${digitsOnly}%`).limit(50).returns<VolunteerRow[]>(),
+      supabase.from("volunteers").select("*").is("deleted_at", null).ilike("phone", `%${digitsOnly}%`).limit(50).returns<VolunteerRow[]>()
     );
   }
 
@@ -754,30 +788,30 @@ export async function getServiceDocumentUrl(path: string) {
 
 export async function deleteServiceRequest(id: string) {
   const supabase = await createClient();
-  const { data: request } = await supabase
-    .from("service_requests")
-    .select("passport_path, visa_path, photo_id_path, proof_of_residency_path")
-    .eq("id", id)
-    .maybeSingle<{
-      passport_path: string | null;
-      visa_path: string | null;
-      photo_id_path: string | null;
-      proof_of_residency_path: string | null;
-    }>();
-
-  const { error } = await supabase.from("service_requests").delete().eq("id", id);
+  const { error } = await supabase.from("service_requests").update({ deleted_at: nowIso() }).eq("id", id);
   if (error) return { error: error.message };
-
-  // Already bare Storage paths, not public URLs — this bucket is private.
-  await removeStorageObjects(supabase, "service-documents", [
-    request?.passport_path,
-    request?.visa_path,
-    request?.photo_id_path,
-    request?.proof_of_residency_path,
-  ]);
-
   revalidatePath("/admin");
   return { error: null };
+}
+
+export async function restoreServiceRequest(id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("service_requests").update({ deleted_at: null }).eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath("/admin");
+  return { error: null };
+}
+
+export async function getDeletedServiceRequests(): Promise<{ error: string | null; requests: ServiceRequestRow[] }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("service_requests")
+    .select("*")
+    .not("deleted_at", "is", null)
+    .order("deleted_at", { ascending: false })
+    .returns<ServiceRequestRow[]>();
+  if (error) return { error: error.message, requests: [] };
+  return { error: null, requests: data ?? [] };
 }
 
 /** Same parallel-lookups-merged-by-id shape as searchMembers (app/admin/
@@ -796,12 +830,12 @@ export async function searchServiceRequests(
   const digitsOnly = q.replace(/\D/g, "");
 
   const lookups = [
-    supabase.from("service_requests").select("*").ilike("requester_name", `%${escaped}%`).limit(50).returns<ServiceRequestRow[]>(),
-    supabase.from("service_requests").select("*").ilike("email", `%${escaped}%`).limit(50).returns<ServiceRequestRow[]>(),
+    supabase.from("service_requests").select("*").is("deleted_at", null).ilike("requester_name", `%${escaped}%`).limit(50).returns<ServiceRequestRow[]>(),
+    supabase.from("service_requests").select("*").is("deleted_at", null).ilike("email", `%${escaped}%`).limit(50).returns<ServiceRequestRow[]>(),
   ];
   if (digitsOnly) {
     lookups.push(
-      supabase.from("service_requests").select("*").ilike("phone", `%${digitsOnly}%`).limit(50).returns<ServiceRequestRow[]>()
+      supabase.from("service_requests").select("*").is("deleted_at", null).ilike("phone", `%${digitsOnly}%`).limit(50).returns<ServiceRequestRow[]>()
     );
   }
 
@@ -854,7 +888,7 @@ export async function getServiceRequestsForExport(
   filter: ServiceRequestExportFilter
 ): Promise<{ error: string | null; rows: ServiceRequestRow[] }> {
   const supabase = await createClient();
-  let query = supabase.from("service_requests").select("*").order("created_at", { ascending: false });
+  let query = supabase.from("service_requests").select("*").is("deleted_at", null).order("created_at", { ascending: false });
 
   if (filter.actionStatuses?.length) query = query.in("action_status", filter.actionStatuses);
   if (filter.serviceTypes?.length) query = query.in("service_type", filter.serviceTypes);
@@ -924,7 +958,7 @@ async function communityRecipients(
   supabase: Awaited<ReturnType<typeof createClient>>,
   filter: BulkEmailFilter
 ): Promise<{ error: string | null; recipients: { email: string; name: string }[] }> {
-  let query = supabase.from("members").select("id, email, name, status, membership_type, created_at");
+  let query = supabase.from("members").select("id, email, name, status, membership_type, created_at").is("deleted_at", null);
   if (!filter.includeInactive) query = query.eq("status", "active");
   if (filter.dateRange?.start) query = query.gte("created_at", filter.dateRange.start);
   if (filter.dateRange?.end) query = query.lte("created_at", filter.dateRange.end);
@@ -957,7 +991,7 @@ async function corporateRecipients(
   supabase: Awaited<ReturnType<typeof createClient>>,
   filter: BulkEmailFilter
 ): Promise<{ error: string | null; recipients: { email: string; name: string }[] }> {
-  let query = supabase.from("corporate_members").select("id, email, business_name, tier, status, created_at");
+  let query = supabase.from("corporate_members").select("id, email, business_name, tier, status, created_at").is("deleted_at", null);
   if (!filter.includeInactive) query = query.eq("status", "active");
   if (filter.corporateTiers?.length) query = query.in("tier", filter.corporateTiers);
   if (filter.dateRange?.start) query = query.gte("created_at", filter.dateRange.start);
@@ -1180,24 +1214,32 @@ export async function updateTeamMember(id: string, formData: FormData) {
 
 export async function deleteTeamMember(id: string) {
   const supabase = await createClient();
-  const { data: member } = await supabase
-    .from("team_members")
-    .select("photo_path")
-    .eq("id", id)
-    .maybeSingle<{ photo_path: string | null }>();
-
-  const { error } = await supabase.from("team_members").delete().eq("id", id);
+  const { error } = await supabase.from("team_members").update({ deleted_at: nowIso() }).eq("id", id);
   if (error) return { error: error.message };
-
-  // storageKeyFromPublicUrl returns null for the seeded static /img/...
-  // paths (0023_team_members_seed.sql), so those are correctly left alone.
-  await removeStorageObjects(supabase, "team-photos", [
-    storageKeyFromPublicUrl("team-photos", member?.photo_path),
-  ]);
-
   refresh();
   revalidatePath("/team");
   return { error: null };
+}
+
+export async function restoreTeamMember(id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("team_members").update({ deleted_at: null }).eq("id", id);
+  if (error) return { error: error.message };
+  refresh();
+  revalidatePath("/team");
+  return { error: null };
+}
+
+export async function getDeletedTeamMembers(): Promise<{ error: string | null; members: TeamMemberRow[] }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("team_members")
+    .select("*")
+    .not("deleted_at", "is", null)
+    .order("deleted_at", { ascending: false })
+    .returns<TeamMemberRow[]>();
+  if (error) return { error: error.message, members: [] };
+  return { error: null, members: data ?? [] };
 }
 
 // ---------------------------------------------------------------------------
@@ -1237,17 +1279,17 @@ export async function searchMembers(query: string): Promise<{ error: string | nu
   const memberNo = digitGroups ? Number(digitGroups[digitGroups.length - 1]) : null;
 
   const lookups = [
-    supabase.from("members").select("*").ilike("name", `%${escaped}%`).limit(50).returns<MemberRow[]>(),
-    supabase.from("members").select("*").ilike("email", `%${escaped}%`).limit(50).returns<MemberRow[]>(),
+    supabase.from("members").select("*").is("deleted_at", null).ilike("name", `%${escaped}%`).limit(50).returns<MemberRow[]>(),
+    supabase.from("members").select("*").is("deleted_at", null).ilike("email", `%${escaped}%`).limit(50).returns<MemberRow[]>(),
   ];
   if (digitsOnly) {
     lookups.push(
-      supabase.from("members").select("*").ilike("cid", `%${digitsOnly}%`).limit(50).returns<MemberRow[]>()
+      supabase.from("members").select("*").is("deleted_at", null).ilike("cid", `%${digitsOnly}%`).limit(50).returns<MemberRow[]>()
     );
   }
   if (memberNo !== null && Number.isSafeInteger(memberNo) && memberNo > 0) {
     lookups.push(
-      supabase.from("members").select("*").eq("member_no", memberNo).limit(1).returns<MemberRow[]>()
+      supabase.from("members").select("*").is("deleted_at", null).eq("member_no", memberNo).limit(1).returns<MemberRow[]>()
     );
   }
 
@@ -1269,10 +1311,30 @@ export async function searchMembers(query: string): Promise<{ error: string | nu
 
 export async function deleteMember(id: string): Promise<{ error: string | null }> {
   const supabase = await createClient();
-  const { error } = await supabase.from("members").delete().eq("id", id);
+  const { error } = await supabase.from("members").update({ deleted_at: nowIso() }).eq("id", id);
   if (error) return { error: error.message };
   revalidatePath("/admin");
   return { error: null };
+}
+
+export async function restoreMember(id: string): Promise<{ error: string | null }> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("members").update({ deleted_at: null }).eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath("/admin");
+  return { error: null };
+}
+
+export async function getDeletedMembers(): Promise<{ error: string | null; members: MemberRow[] }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("members")
+    .select("*")
+    .not("deleted_at", "is", null)
+    .order("deleted_at", { ascending: false })
+    .returns<MemberRow[]>();
+  if (error) return { error: error.message, members: [] };
+  return { error: null, members: data ?? [] };
 }
 
 export type MemberDetail = {
@@ -1398,7 +1460,7 @@ function isEffectivelyActive(m: MemberRow): boolean {
 
 export async function getMembersForExport(filter: MembersExportFilter): Promise<{ error: string | null; rows: MemberRow[] }> {
   const supabase = await createClient();
-  let query = supabase.from("members").select("*").order("created_at", { ascending: false });
+  let query = supabase.from("members").select("*").is("deleted_at", null).order("created_at", { ascending: false });
 
   if (filter.dateRange?.start) query = query.gte("created_at", filter.dateRange.start);
   if (filter.dateRange?.end) query = query.lte("created_at", filter.dateRange.end);
@@ -1434,7 +1496,7 @@ export async function searchCorporateMembers(query: string): Promise<{ error: st
 
   const supabase = await createClient();
   const lookups = (["business_name", "contact_name", "email", "abn"] as const).map((column) =>
-    supabase.from("corporate_members").select("*").ilike(column, `%${escaped}%`).limit(50).returns<CorporateMemberRow[]>()
+    supabase.from("corporate_members").select("*").is("deleted_at", null).ilike(column, `%${escaped}%`).limit(50).returns<CorporateMemberRow[]>()
   );
 
   const responses = await Promise.all(lookups);
@@ -1499,26 +1561,32 @@ export async function createCorporateMemberManually(formData: FormData): Promise
 
 export async function deleteCorporateMember(id: string): Promise<{ error: string | null }> {
   const supabase = await createClient();
-  const { data: member } = await supabase
-    .from("corporate_members")
-    .select("logo_path, business_certificate_path")
-    .eq("id", id)
-    .maybeSingle<{ logo_path: string | null; business_certificate_path: string | null }>();
-
-  const { error } = await supabase.from("corporate_members").delete().eq("id", id);
+  const { error } = await supabase.from("corporate_members").update({ deleted_at: nowIso() }).eq("id", id);
   if (error) return { error: error.message };
-
-  await Promise.all([
-    removeStorageObjects(supabase, "corporate-logos", [
-      storageKeyFromPublicUrl("corporate-logos", member?.logo_path),
-    ]),
-    // business_certificate_path is already a bare path — that bucket is private.
-    removeStorageObjects(supabase, "corporate-documents", [member?.business_certificate_path]),
-  ]);
-
   revalidatePath("/admin");
   revalidatePath("/partners");
   return { error: null };
+}
+
+export async function restoreCorporateMember(id: string): Promise<{ error: string | null }> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("corporate_members").update({ deleted_at: null }).eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath("/admin");
+  revalidatePath("/partners");
+  return { error: null };
+}
+
+export async function getDeletedCorporateMembers(): Promise<{ error: string | null; members: CorporateMemberRow[] }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("corporate_members")
+    .select("*")
+    .not("deleted_at", "is", null)
+    .order("deleted_at", { ascending: false })
+    .returns<CorporateMemberRow[]>();
+  if (error) return { error: error.message, members: [] };
+  return { error: null, members: data ?? [] };
 }
 
 export type CorporateExportFilter = {
@@ -1531,7 +1599,7 @@ export async function getCorporateMembersForExport(
   filter: CorporateExportFilter
 ): Promise<{ error: string | null; rows: CorporateMemberRow[] }> {
   const supabase = await createClient();
-  let query = supabase.from("corporate_members").select("*").order("created_at", { ascending: false });
+  let query = supabase.from("corporate_members").select("*").is("deleted_at", null).order("created_at", { ascending: false });
 
   if (filter.tiers?.length) query = query.in("tier", filter.tiers);
   if (filter.statuses?.length) query = query.in("status", filter.statuses);

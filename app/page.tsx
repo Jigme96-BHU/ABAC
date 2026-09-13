@@ -20,6 +20,7 @@ export default async function HomePage() {
     .from("events")
     .select("*")
     .eq("published", true)
+    .is("deleted_at", null)
     .gte("date", today)
     .order("date", { ascending: true })
     .limit(4)

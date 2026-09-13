@@ -22,6 +22,7 @@ export default async function EventsPage() {
     .from("events")
     .select("*")
     .eq("published", true)
+    .is("deleted_at", null)
     .gte("date", today)
     .order("date", { ascending: true })
     .returns<DBEventRow[]>();

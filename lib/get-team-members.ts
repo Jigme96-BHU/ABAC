@@ -17,6 +17,7 @@ export async function getTeamMembersByCategory(): Promise<Record<TeamCategory, T
     .from("team_members")
     .select("*")
     .eq("active", true)
+    .is("deleted_at", null)
     .order("category", { ascending: true })
     .order("display_order", { ascending: true })
     .returns<TeamMemberRow[]>();

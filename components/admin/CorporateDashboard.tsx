@@ -11,6 +11,8 @@ import {
   searchCorporateMembers,
   createCorporateMemberManually,
   deleteCorporateMember,
+  restoreCorporateMember,
+  getDeletedCorporateMembers,
   getCorporateMembersForExport,
   getSignedDocumentUrl,
   hideCorporatePartner,
@@ -20,6 +22,7 @@ import { createClient } from "@/lib/supabase/client";
 import { downloadCsv, type CsvColumn } from "@/lib/csv";
 import { CORPORATE_TIERS, corporateTierLabel, type CorporateTier } from "@/lib/corporate-tiers";
 import { usePendingDelete } from "@/lib/usePendingDelete";
+import RecentlyDeleted from "./RecentlyDeleted";
 import type { CorporateMemberRow } from "@/lib/supabase/types";
 
 const STATUS_LABEL: Record<CorporateMemberRow["status"], string> = {
@@ -72,6 +75,17 @@ export default function CorporateDashboard({ corporateMembers }: { corporateMemb
       ) : (
         <CorporateExportView />
       )}
+
+      <RecentlyDeleted
+        fetchDeleted={async () => {
+          const res = await getDeletedCorporateMembers();
+          return { error: res.error, items: res.members };
+        }}
+        onRestore={restoreCorporateMember}
+        getLabel={(m) => m.business_name}
+        getDeletedAt={(m) => m.deleted_at ?? m.updated_at}
+        noun="corporate members"
+      />
     </div>
   );
 }

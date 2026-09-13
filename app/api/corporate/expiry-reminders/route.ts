@@ -24,6 +24,7 @@ export async function GET(req: Request) {
       .from("corporate_members")
       .select("id, business_name, email, tier, expires_at, reminder_14d_sent, reminder_expiry_sent")
       .eq("status", "active")
+      .is("deleted_at", null)
       .not("expires_at", "is", null)
       .lte("expires_at", twoWeeksFromNow.toISOString().split("T")[0])
       .gte("expires_at", today.toISOString().split("T")[0]);

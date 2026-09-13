@@ -11,6 +11,7 @@ export type EventRow = {
   access: "open" | "members";
   cta: "rsvp" | "volunteer" | null;
   published: boolean;
+  deleted_at: string | null; // soft-delete — set on Delete, cleared on Restore (0031_soft_delete_and_trash.sql)
   created_at: string;
   updated_at: string;
 };
@@ -40,6 +41,7 @@ export type StoryRow = {
   video_size: number | null; // bytes
   video_duration: number | null; // seconds
   published: boolean;
+  deleted_at: string | null; // soft-delete (0031_soft_delete_and_trash.sql)
   created_at: string;
   updated_at: string;
 };
@@ -77,6 +79,7 @@ export type MemberRow = {
   is_dependent: boolean;
   joined_at: string | null;
   expires_at: string | null;
+  deleted_at: string | null; // soft-delete (0031_soft_delete_and_trash.sql)
   created_at: string;
   updated_at: string;
 };
@@ -95,6 +98,7 @@ export type VolunteerRow = {
   guardian_phone: string | null;
   guardian_email: string | null;
   guardian_consent: boolean;
+  deleted_at: string | null; // soft-delete (0031_soft_delete_and_trash.sql)
   created_at: string;
   updated_at: string;
 };
@@ -120,6 +124,7 @@ export type CorporateMemberRow = {
   hidden_from_partners: boolean; // display-only toggle, independent of status (0022_corporate_business_certificate.sql)
   joined_at: string | null;
   expires_at: string | null;
+  deleted_at: string | null; // soft-delete (0031_soft_delete_and_trash.sql)
   created_at: string;
   updated_at: string;
 };
@@ -145,6 +150,7 @@ export type ServiceRequestRow = {
   stripe_checkout_session_id: string | null;
   action_status: "pending" | "done" | "declined"; // committee workflow state — distinct from `status` (payment), 0026_service_request_action_tracking.sql
   admin_comment: string | null;
+  deleted_at: string | null; // soft-delete (0031_soft_delete_and_trash.sql)
   created_at: string;
   updated_at: string;
 };
@@ -159,6 +165,7 @@ export type DocumentRow = {
   file_name: string; // original filename, shown/used for the download
   file_size: number | null; // bytes
   published: boolean;
+  deleted_at: string | null; // soft-delete (0031_soft_delete_and_trash.sql)
   created_at: string;
   updated_at: string;
 };
@@ -178,6 +185,7 @@ export type TeamMemberRow = {
   term_start: string | null; // yyyy-mm-dd
   term_end: string | null; // yyyy-mm-dd
   is_founder: boolean; // former_presidents only — whether they also founded ABAC (0023_team_members_seed.sql)
+  deleted_at: string | null; // soft-delete (0031_soft_delete_and_trash.sql)
   created_at: string;
   updated_at: string;
 };
