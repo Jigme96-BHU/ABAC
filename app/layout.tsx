@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { Cinzel, Albert_Sans } from "next/font/google";
 import localFont from "next/font/local";
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
+import { SITE_URL } from "@/lib/site-url";
 import SiteHeader from "@/components/SiteHeader";
 import SiteFooter from "@/components/SiteFooter";
 import ChatWidget from "@/components/ChatWidget";
@@ -34,10 +37,16 @@ const tibetan = localFont({
   weight: "400 500",
   variable: "--font-tibetan",
   display: "swap",
+  // This is the last-resort fallback after DDC Joyig (globals.css) and the
+  // system Tibetan fonts in the --dz stack — DDC Joyig already covers every
+  // codepoint the site renders, so this file is only fetched on the rare
+  // request where DDC Joyig itself fails to load. Preloading it would force
+  // that fetch on every page regardless.
+  preload: false,
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://bhutaneseincanberra.org.au"),
+  metadataBase: new URL(SITE_URL),
   title: {
     default: "ABAC — Australia–Bhutan Association of Canberra",
     template: "%s · ABAC",
@@ -69,6 +78,8 @@ export default function RootLayout({
         {children}
         <SiteFooter />
         <ChatWidget />
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );

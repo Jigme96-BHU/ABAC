@@ -4,7 +4,7 @@
    The prototype's `.page { display:none }` swap system was removed —
    Next.js routes handle that now. */
 
-@font-face{font-family:"DDC Joyig";src:url(/fonts/DDCJoyig-Regular.ttf) format("truetype");font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:"DDC Joyig";src:url(/fonts/DDCJoyig-Regular.woff2) format("woff2");font-weight:400;font-style:normal;font-display:swap;unicode-range:U+0020,U+0F00,U+0F04,U+0F05,U+0F0B,U+0F0D,U+0F20-0F22,U+0F26-0F28,U+0F40-0F42,U+0F44-0F47,U+0F4A,U+0F4F,U+0F50,U+0F51,U+0F53-0F56,U+0F58-0F5B,U+0F5E-0F68,U+0F72,U+0F74,U+0F7A,U+0F7C,U+0F90,U+0F92,U+0F9F,U+0FA1,U+0FA4,U+0FAB,U+0FB1-0FB3}
 
 :root{
   --gd-deep:#0E2338; --gd:#16324F; --gd-soft:#F3ECD9; --gd-ink:#16324F;
@@ -344,6 +344,9 @@ h1,h2,h3{letter-spacing:.5px}
 .orn span{width:90px;height:1px;background:linear-gradient(90deg,transparent,var(--gold))}
 .orn span:last-child{background:linear-gradient(270deg,transparent,var(--gold))}
 .orn i{font-style:normal;color:var(--gold);font-size:10px}
+.orn-pulse i{animation:orn-pulse 1.4s ease-in-out infinite}
+@keyframes orn-pulse{0%,100%{opacity:.35}50%{opacity:1}}
+@media(prefers-reduced-motion:reduce){.orn-pulse i{animation:none}}
 .royal-sub{font-family:var(--font-cinzel),serif;color:var(--gold-bright);font-size:clamp(8.5px,1.55vw,12px);letter-spacing:clamp(1px,.42vw,3px);margin:8px 0 6px;white-space:nowrap}
 .hero .wrap{position:relative;z-index:2;margin:18px auto;display:flex;flex-direction:column;align-items:center;max-width:1000px}
 /* No framed panel now, so the text sits directly on the photo — a soft shadow
