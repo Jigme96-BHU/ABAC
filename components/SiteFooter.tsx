@@ -1,6 +1,15 @@
-import Link from "next/link";
+import NextLink from "next/link";
 import Image from "next/image";
 import logo from "@/public/img/logo/abac-logo.png";
+import type { ComponentProps } from "react";
+
+// The footer renders on every page, so its ~13 links eagerly prefetch on
+// every single page view by default — most never clicked right after
+// landing (nobody's next move is /admin or /privacy). It's below the fold
+// too, so losing the instant-navigation prefetch here costs little.
+function Link(props: ComponentProps<typeof NextLink>) {
+  return <NextLink prefetch={false} {...props} />;
+}
 
 const SOCIAL = {
   facebook: "https://www.facebook.com/bhutaneseincanberra/",
