@@ -2,7 +2,7 @@
 
 import { useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { deleteVolunteer, searchVolunteers, restoreVolunteer, getDeletedVolunteers } from "@/app/admin/actions";
+import { deleteVolunteer, searchVolunteers, restoreVolunteer, permanentlyDeleteVolunteer, getDeletedVolunteers } from "@/app/admin/actions";
 import { ageFrom } from "@/lib/validation";
 import { downloadCsv, type CsvColumn } from "@/lib/csv";
 import { usePendingDelete } from "@/lib/usePendingDelete";
@@ -55,6 +55,7 @@ export default function VolunteersDashboard({ volunteers }: { volunteers: Volunt
           return { error: res.error, items: res.volunteers };
         }}
         onRestore={restoreVolunteer}
+        onPermanentDelete={permanentlyDeleteVolunteer}
         getLabel={(v) => v.name}
         getDeletedAt={(v) => v.deleted_at ?? v.updated_at}
         noun="volunteer registrations"

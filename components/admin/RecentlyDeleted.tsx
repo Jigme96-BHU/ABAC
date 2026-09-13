@@ -12,12 +12,14 @@ import { useRouter } from "next/navigation";
 export default function RecentlyDeleted<T extends { id: string }>({
   fetchDeleted,
   onRestore,
+  onPermanentDelete,
   getLabel,
   getDeletedAt,
   noun,
 }: {
   fetchDeleted: () => Promise<{ error: string | null; items: T[] }>;
   onRestore: (id: string) => Promise<{ error: string | null }>;
+  onPermanentDelete: (id: string) => Promise<{ error: string | null }>;
   getLabel: (item: T) => string;
   getDeletedAt: (item: T) => string;
   noun: string;
@@ -66,6 +68,25 @@ export default function RecentlyDeleted<T extends { id: string }>({
     });
   }
 
+  function handlePermanentDelete(id: string, label: string) {
+    if (!confirm(`Permanently delete "${label}"? This cannot be undone — it will not wait for the 30-day trash period.`)) {
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      try {
+        const res = await onPermanentDelete(id);
+        if (res.error) {
+          setError(res.error);
+          return;
+        }
+        setItems((prev) => (prev ? prev.filter((item) => item.id !== id) : prev));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Delete failed — please try again.");
+      }
+    });
+  }
+
   return (
     <div style={{ marginTop: 28 }}>
       <button className="btn btn-ghost btn-sm" onClick={toggle}>
@@ -99,13 +120,22 @@ export default function RecentlyDeleted<T extends { id: string }>({
                   <tr key={item.id}>
                     <td>{getLabel(item)}</td>
                     <td>{new Date(getDeletedAt(item)).toLocaleDateString("en-AU")}</td>
-                    <td style={{ textAlign: "right" }}>
+                    <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                       <button
                         className="btn btn-ghost btn-sm"
+                        style={{ marginRight: 6 }}
                         onClick={() => handleRestore(item.id)}
                         disabled={pending}
                       >
                         Restore
+                      </button>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        style={{ color: "#c33" }}
+                        onClick={() => handlePermanentDelete(item.id, getLabel(item))}
+                        disabled={pending}
+                      >
+                        Delete permanently
                       </button>
                     </td>
                   </tr>

@@ -12,6 +12,7 @@ import {
   createCorporateMemberManually,
   deleteCorporateMember,
   restoreCorporateMember,
+  permanentlyDeleteCorporateMember,
   getDeletedCorporateMembers,
   getCorporateMembersForExport,
   getSignedDocumentUrl,
@@ -82,6 +83,7 @@ export default function CorporateDashboard({ corporateMembers }: { corporateMemb
           return { error: res.error, items: res.members };
         }}
         onRestore={restoreCorporateMember}
+        onPermanentDelete={permanentlyDeleteCorporateMember}
         getLabel={(m) => m.business_name}
         getDeletedAt={(m) => m.deleted_at ?? m.updated_at}
         noun="corporate members"

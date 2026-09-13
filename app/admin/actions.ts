@@ -101,6 +101,18 @@ export async function restoreEvent(id: string) {
   return { error: null };
 }
 
+/** Immediately hard-deletes an already soft-deleted row, instead of waiting
+ *  for the daily purge cron's 30-day cutoff. The `.not("deleted_at", "is",
+ *  null)` guard means this can only ever remove something already in the
+ *  trash — it's not a back door around soft-delete for an active row. */
+export async function permanentlyDeleteEvent(id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("events").delete().eq("id", id).not("deleted_at", "is", null);
+  if (error) return { error: error.message };
+  refresh();
+  return { error: null };
+}
+
 export async function getDeletedEvents(): Promise<{ error: string | null; events: EventRow[] }> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -412,6 +424,37 @@ export async function restoreStory(id: string) {
   return { error: null };
 }
 
+export async function permanentlyDeleteStory(id: string) {
+  const supabase = await createClient();
+
+  // Fetched before the delete — story_images cascades away with the story
+  // row, so its paths would be unrecoverable after.
+  const [{ data: story }, { data: images }] = await Promise.all([
+    supabase
+      .from("stories")
+      .select("image_path, video_path")
+      .eq("id", id)
+      .maybeSingle<{ image_path: string | null; video_path: string | null }>(),
+    supabase.from("story_images").select("path").eq("story_id", id).returns<{ path: string }[]>(),
+  ]);
+
+  const { error } = await supabase.from("stories").delete().eq("id", id).not("deleted_at", "is", null);
+  if (error) return { error: error.message };
+
+  await Promise.all([
+    removeStorageObjects(supabase, "story-images", [
+      storageKeyFromPublicUrl("story-images", story?.image_path),
+      ...(images ?? []).map((img) => storageKeyFromPublicUrl("story-images", img.path)),
+    ]),
+    removeStorageObjects(supabase, "story-videos", [
+      storageKeyFromPublicUrl("story-videos", story?.video_path),
+    ]),
+  ]);
+
+  refresh();
+  return { error: null };
+}
+
 export async function getDeletedStories(): Promise<{ error: string | null; stories: StoryRow[] }> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -543,6 +586,26 @@ export async function restoreDocument(id: string) {
   return { error: null };
 }
 
+export async function permanentlyDeleteDocument(id: string) {
+  const supabase = await createClient();
+  const { data: doc } = await supabase
+    .from("documents")
+    .select("file_path")
+    .eq("id", id)
+    .maybeSingle<{ file_path: string }>();
+
+  const { error } = await supabase.from("documents").delete().eq("id", id).not("deleted_at", "is", null);
+  if (error) return { error: error.message };
+
+  await removeStorageObjects(supabase, "documents", [
+    storageKeyFromPublicUrl("documents", doc?.file_path),
+  ]);
+
+  refresh();
+  revalidatePath("/documents");
+  return { error: null };
+}
+
 export async function getDeletedDocuments(): Promise<{ error: string | null; documents: DocumentRow[] }> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -571,6 +634,14 @@ export async function deleteVolunteer(id: string) {
 export async function restoreVolunteer(id: string) {
   const supabase = await createClient();
   const { error } = await supabase.from("volunteers").update({ deleted_at: null }).eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath("/admin");
+  return { error: null };
+}
+
+export async function permanentlyDeleteVolunteer(id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("volunteers").delete().eq("id", id).not("deleted_at", "is", null);
   if (error) return { error: error.message };
   revalidatePath("/admin");
   return { error: null };
@@ -798,6 +869,34 @@ export async function restoreServiceRequest(id: string) {
   const supabase = await createClient();
   const { error } = await supabase.from("service_requests").update({ deleted_at: null }).eq("id", id);
   if (error) return { error: error.message };
+  revalidatePath("/admin");
+  return { error: null };
+}
+
+export async function permanentlyDeleteServiceRequest(id: string) {
+  const supabase = await createClient();
+  const { data: request } = await supabase
+    .from("service_requests")
+    .select("passport_path, visa_path, photo_id_path, proof_of_residency_path")
+    .eq("id", id)
+    .maybeSingle<{
+      passport_path: string | null;
+      visa_path: string | null;
+      photo_id_path: string | null;
+      proof_of_residency_path: string | null;
+    }>();
+
+  const { error } = await supabase.from("service_requests").delete().eq("id", id).not("deleted_at", "is", null);
+  if (error) return { error: error.message };
+
+  // Already bare Storage paths, not public URLs — this bucket is private.
+  await removeStorageObjects(supabase, "service-documents", [
+    request?.passport_path,
+    request?.visa_path,
+    request?.photo_id_path,
+    request?.proof_of_residency_path,
+  ]);
+
   revalidatePath("/admin");
   return { error: null };
 }
@@ -1230,6 +1329,28 @@ export async function restoreTeamMember(id: string) {
   return { error: null };
 }
 
+export async function permanentlyDeleteTeamMember(id: string) {
+  const supabase = await createClient();
+  const { data: member } = await supabase
+    .from("team_members")
+    .select("photo_path")
+    .eq("id", id)
+    .maybeSingle<{ photo_path: string | null }>();
+
+  const { error } = await supabase.from("team_members").delete().eq("id", id).not("deleted_at", "is", null);
+  if (error) return { error: error.message };
+
+  // storageKeyFromPublicUrl returns null for the seeded static /img/...
+  // paths (0023_team_members_seed.sql), so those are correctly left alone.
+  await removeStorageObjects(supabase, "team-photos", [
+    storageKeyFromPublicUrl("team-photos", member?.photo_path),
+  ]);
+
+  refresh();
+  revalidatePath("/team");
+  return { error: null };
+}
+
 export async function getDeletedTeamMembers(): Promise<{ error: string | null; members: TeamMemberRow[] }> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -1320,6 +1441,14 @@ export async function deleteMember(id: string): Promise<{ error: string | null }
 export async function restoreMember(id: string): Promise<{ error: string | null }> {
   const supabase = await createClient();
   const { error } = await supabase.from("members").update({ deleted_at: null }).eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath("/admin");
+  return { error: null };
+}
+
+export async function permanentlyDeleteMember(id: string): Promise<{ error: string | null }> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("members").delete().eq("id", id).not("deleted_at", "is", null);
   if (error) return { error: error.message };
   revalidatePath("/admin");
   return { error: null };
@@ -1572,6 +1701,30 @@ export async function restoreCorporateMember(id: string): Promise<{ error: strin
   const supabase = await createClient();
   const { error } = await supabase.from("corporate_members").update({ deleted_at: null }).eq("id", id);
   if (error) return { error: error.message };
+  revalidatePath("/admin");
+  revalidatePath("/partners");
+  return { error: null };
+}
+
+export async function permanentlyDeleteCorporateMember(id: string): Promise<{ error: string | null }> {
+  const supabase = await createClient();
+  const { data: member } = await supabase
+    .from("corporate_members")
+    .select("logo_path, business_certificate_path")
+    .eq("id", id)
+    .maybeSingle<{ logo_path: string | null; business_certificate_path: string | null }>();
+
+  const { error } = await supabase.from("corporate_members").delete().eq("id", id).not("deleted_at", "is", null);
+  if (error) return { error: error.message };
+
+  await Promise.all([
+    removeStorageObjects(supabase, "corporate-logos", [
+      storageKeyFromPublicUrl("corporate-logos", member?.logo_path),
+    ]),
+    // business_certificate_path is already a bare path — that bucket is private.
+    removeStorageObjects(supabase, "corporate-documents", [member?.business_certificate_path]),
+  ]);
+
   revalidatePath("/admin");
   revalidatePath("/partners");
   return { error: null };
