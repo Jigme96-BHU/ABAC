@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
-import { getAllStories } from "@/lib/get-stories";
+import { getStoryBySlug } from "@/lib/get-stories";
 import { storyDate } from "@/components/StoryCard";
 
 type Props = { params: Promise<{ slug: string }> };
@@ -13,7 +13,7 @@ type Props = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const story = (await getAllStories()).find((s) => s.slug === slug);
+  const story = await getStoryBySlug(slug);
   if (!story) return {};
   return {
     title: story.title,
@@ -30,7 +30,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function EventStoryPage({ params }: Props) {
   const { slug } = await params;
-  const story = (await getAllStories()).find((s) => s.slug === slug);
+  const story = await getStoryBySlug(slug);
   if (!story) notFound();
 
   return (

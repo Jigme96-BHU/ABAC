@@ -11,8 +11,7 @@ import EventRow from "@/components/EventRow";
 import RoyalPortrait from "@/components/RoyalPortrait";
 
 export default async function HomePage() {
-  const allStories = await getAllStories();
-  const latest = allStories.slice(0, 4);
+  const latest = await getAllStories(4);
 
   const supabase = await createClient();
   const today = new Date().toISOString().slice(0, 10);

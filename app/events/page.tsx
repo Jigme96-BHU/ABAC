@@ -30,7 +30,11 @@ export default async function EventsPage() {
   const upcoming = (rows ?? []).map(fromRow);
   const groups = byMonth(upcoming);
   const now = new Date();
-  const allStories = await getAllStories();
+  // Capped so this page's query and render cost stay bounded as the
+  // committee's archive grows — a community association posting a handful
+  // of write-ups a year won't hit this for a long while. Once it does,
+  // replace the cap with real pagination.
+  const allStories = await getAllStories(30);
 
   return (
     <main>

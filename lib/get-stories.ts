@@ -25,16 +25,26 @@ function fromStoryRow(row: StoryRow, galleryImages: StoryImageRow[]): Story {
 
 /** The full public story feed: the historical WordPress-migrated posts
  *  (content/stories.ts, static) plus whatever the committee has added since
- *  through /admin (Supabase), newest first. */
-export async function getAllStories(): Promise<Story[]> {
+ *  through /admin (Supabase), newest first.
+ *
+ *  Pass `limit` for a "just the top N" caller (the homepage's latest-4):
+ *  the DB query is capped at `limit` rows too, not just the returned array
+ *  — safe because rows come back date-descending, so the DB's own top
+ *  `limit` can never exclude a row that belongs in the combined top
+ *  `limit` (anything past row `limit` is older than all of them). Without
+ *  this, a caller that only wants 4 stories would still make the query and
+ *  the page keep fetching every story (and every gallery image) ever
+ *  published, forever, as the committee's archive grows. */
+export async function getAllStories(limit?: number): Promise<Story[]> {
   const supabase = await createClient();
-  const { data } = await supabase
+  let query = supabase
     .from("stories")
     .select("*")
     .eq("published", true)
     .is("deleted_at", null)
-    .order("date", { ascending: false })
-    .returns<StoryRow[]>();
+    .order("date", { ascending: false });
+  if (limit) query = query.limit(limit);
+  const { data } = await query.returns<StoryRow[]>();
 
   const rows = data ?? [];
   const imagesByStory = new Map<string, StoryImageRow[]>();
@@ -52,5 +62,33 @@ export async function getAllStories(): Promise<Story[]> {
   }
 
   const fromDb = rows.map((row) => fromStoryRow(row, imagesByStory.get(row.id) ?? []));
-  return [...fromDb, ...STORIES].sort((a, b) => b.date.localeCompare(a.date));
+  const all = [...fromDb, ...STORIES].sort((a, b) => b.date.localeCompare(a.date));
+  return limit ? all.slice(0, limit) : all;
+}
+
+/** A single story by slug, for the detail page — queries just that one row
+ *  (and its own gallery images) instead of fetching the entire story feed
+ *  to `.find()` one out of it. */
+export async function getStoryBySlug(slug: string): Promise<Story | null> {
+  const fromStatic = STORIES.find((s) => s.slug === slug);
+  if (fromStatic) return fromStatic;
+
+  const supabase = await createClient();
+  const { data: row } = await supabase
+    .from("stories")
+    .select("*")
+    .eq("slug", slug)
+    .eq("published", true)
+    .is("deleted_at", null)
+    .maybeSingle<StoryRow>();
+  if (!row) return null;
+
+  const { data: imageRows } = await supabase
+    .from("story_images")
+    .select("*")
+    .eq("story_id", row.id)
+    .order("display_order", { ascending: true })
+    .returns<StoryImageRow[]>();
+
+  return fromStoryRow(row, imageRows ?? []);
 }
