@@ -31,6 +31,11 @@ export default function StoryCard({ story }: { story: Story }) {
       href={`/events/${story.slug}`}
       className="story-card"
       style={{ textDecoration: "none", color: "inherit", display: "block" }}
+      // A grid of these can be 10+ cards deep — eagerly prefetching every
+      // one the moment it scrolls into view competes for the same
+      // connection pool as the photos actually on screen. A visitor clicks
+      // at most one or two, so prefetch only the one they're about to.
+      prefetch={false}
     >
       {story.image && dim ? (
         <Image

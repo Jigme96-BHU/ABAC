@@ -51,7 +51,10 @@ export default function SiteHeader() {
 
       <div className={menuOpen ? "mobile-menu open" : "mobile-menu"} id="mmenu">
         {NAV.map((item) => (
-          <Link key={item.href} href={item.href} onClick={() => setMenuOpen(false)}>
+          // Always mounted (CSS just hides it above the mobile breakpoint),
+          // so without this it silently duplicates every prefetch the
+          // desktop nav below already does, on every single page.
+          <Link key={item.href} href={item.href} onClick={() => setMenuOpen(false)} prefetch={false}>
             {item.label}
           </Link>
         ))}
