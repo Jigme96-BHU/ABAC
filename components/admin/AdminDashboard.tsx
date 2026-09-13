@@ -4,7 +4,7 @@ import { Fragment, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import EventForm from "./EventForm";
 import RecentlyDeleted from "./RecentlyDeleted";
-import { deleteEvent, getEventRsvps, restoreEvent, getDeletedEvents } from "@/app/admin/actions";
+import { deleteEvent, getEventRsvps, restoreEvent, permanentlyDeleteEvent, getDeletedEvents } from "@/app/admin/actions";
 import { usePendingDelete } from "@/lib/usePendingDelete";
 import type { EventRow } from "@/lib/supabase/types";
 
@@ -181,6 +181,7 @@ export default function AdminDashboard({ events }: { events: EventRow[] }) {
           return { error: res.error, items: res.events };
         }}
         onRestore={restoreEvent}
+        onPermanentDelete={permanentlyDeleteEvent}
         getLabel={(ev) => ev.title}
         getDeletedAt={(ev) => ev.deleted_at ?? ev.updated_at}
         noun="events"

@@ -8,6 +8,7 @@ import {
   getMembersForExport,
   deleteMember,
   restoreMember,
+  permanentlyDeleteMember,
   getDeletedMembers,
   type MemberDetail,
   type MembersExportFilter,
@@ -84,6 +85,7 @@ export default function MembersDashboard({
           return { error: res.error, items: res.members };
         }}
         onRestore={restoreMember}
+        onPermanentDelete={permanentlyDeleteMember}
         getLabel={(m) => `${m.name} (${memberNo(m)})`}
         getDeletedAt={(m) => m.deleted_at ?? m.updated_at}
         noun="membership records"

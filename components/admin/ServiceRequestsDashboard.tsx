@@ -6,6 +6,7 @@ import {
   getServiceDocumentUrl,
   deleteServiceRequest,
   restoreServiceRequest,
+  permanentlyDeleteServiceRequest,
   getDeletedServiceRequests,
   searchServiceRequests,
   updateServiceAction,
@@ -75,6 +76,7 @@ export default function ServiceRequestsDashboard({ requests }: { requests: Servi
           return { error: res.error, items: res.requests };
         }}
         onRestore={restoreServiceRequest}
+        onPermanentDelete={permanentlyDeleteServiceRequest}
         getLabel={(r) => r.requester_name}
         getDeletedAt={(r) => r.deleted_at ?? r.updated_at}
         noun="service requests"

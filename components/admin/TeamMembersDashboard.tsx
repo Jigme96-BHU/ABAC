@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import TeamMemberForm from "./TeamMemberForm";
 import RecentlyDeleted from "./RecentlyDeleted";
-import { deleteTeamMember, restoreTeamMember, getDeletedTeamMembers } from "@/app/admin/actions";
+import { deleteTeamMember, restoreTeamMember, permanentlyDeleteTeamMember, getDeletedTeamMembers } from "@/app/admin/actions";
 import { usePendingDelete } from "@/lib/usePendingDelete";
 import type { TeamMemberRow } from "@/lib/supabase/types";
 
@@ -149,6 +149,7 @@ export default function TeamMembersDashboard({ members }: { members: TeamMemberR
           return { error: res.error, items: res.members };
         }}
         onRestore={restoreTeamMember}
+        onPermanentDelete={permanentlyDeleteTeamMember}
         getLabel={(m) => m.name}
         getDeletedAt={(m) => m.deleted_at ?? m.updated_at}
         noun="team members"
