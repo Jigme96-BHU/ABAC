@@ -1,18 +1,30 @@
 "use client";
 
-import { useState, useTransition, type FormEvent } from "react";
+import { useRef, useState, useTransition, type FormEvent } from "react";
 import { startDonation } from "@/app/donate/actions";
 
-const AMOUNTS = [10, 25, 50, 100];
+const AMOUNTS = ["10", "25", "50", "100"];
+const OTHER = "other";
 
 export default function DonateForm() {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [amount, setAmount] = useState("25");
+  const [choice, setChoice] = useState("25");
+  const [other, setOther] = useState("");
+  const otherRef = useRef<HTMLInputElement>(null);
+
+  const amount = choice === OTHER ? other : choice;
+
+  function pickOther() {
+    setChoice(OTHER);
+    // Focus after React shows the input.
+    requestAnimationFrame(() => otherRef.current?.focus());
+  }
 
   function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
+    const formData = new FormData();
+    formData.set("amount", amount);
     setError(null);
     startTransition(async () => {
       // On success the action redirects to Stripe and never returns.
@@ -28,28 +40,45 @@ export default function DonateForm() {
           <button
             type="button"
             key={a}
-            className={`id-pill${amount === String(a) ? " sel" : ""}`}
-            aria-pressed={amount === String(a)}
-            onClick={() => setAmount(String(a))}
+            className={`id-pill${choice === a ? " sel" : ""}`}
+            aria-pressed={choice === a}
+            onClick={() => setChoice(a)}
             style={{ cursor: "pointer" }}
           >
             ${a}
           </button>
         ))}
+        <button
+          type="button"
+          className={`id-pill${choice === OTHER ? " sel" : ""}`}
+          aria-pressed={choice === OTHER}
+          onClick={pickOther}
+          style={{ cursor: "pointer" }}
+        >
+          Other amount
+        </button>
       </div>
 
-      <label className="f" htmlFor="d-amount">
-        Amount (AUD)
-      </label>
-      <input
-        id="d-amount"
-        name="amount"
-        type="text"
-        inputMode="decimal"
-        required
-        value={amount}
-        onChange={(e) => setAmount(e.target.value)}
-      />
+      {choice === OTHER && (
+        <>
+          <label className="f" htmlFor="d-amount">
+            Enter amount (AUD)
+          </label>
+          <input
+            ref={otherRef}
+            id="d-amount"
+            type="text"
+            inputMode="decimal"
+            required
+            placeholder="e.g. 75"
+            value={other}
+            onChange={(e) => setOther(e.target.value)}
+          />
+          <p style={{ fontSize: 12, color: "var(--ink-soft)", marginTop: 6 }}>
+            Any amount from $2 to $10,000.
+          </p>
+        </>
+      )}
 
       {error && (
         <div className="notice warn" style={{ marginTop: 16 }}>
@@ -60,9 +89,9 @@ export default function DonateForm() {
       <button
         className="btn btn-primary"
         style={{ width: "100%", marginTop: 20 }}
-        disabled={pending}
+        disabled={pending || !amount}
       >
-        {pending ? "Opening secure checkout…" : "Donate"}
+        {pending ? "Opening secure checkout…" : amount ? `Donate $${amount.replace(/^\$/, "")}` : "Donate"}
       </button>
     </form>
   );
