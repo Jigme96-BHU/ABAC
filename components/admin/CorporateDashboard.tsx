@@ -24,6 +24,7 @@ import { downloadCsv, type CsvColumn } from "@/lib/csv";
 import { CORPORATE_TIERS, corporateTierLabel, type CorporateTier } from "@/lib/corporate-tiers";
 import { usePendingDelete } from "@/lib/usePendingDelete";
 import RecentlyDeleted from "./RecentlyDeleted";
+import CorporateEditForm from "./CorporateEditForm";
 import type { CorporateMemberRow } from "@/lib/supabase/types";
 
 const STATUS_LABEL: Record<CorporateMemberRow["status"], string> = {
@@ -96,8 +97,14 @@ function CorporateTable({ members }: { members: CorporateMemberRow[] }) {
   const [pending, startTransition] = useTransition();
   const [rowError, setRowError] = useState<Record<string, string>>({});
   const [busyPath, setBusyPath] = useState<string | null>(null);
+  const [editing, setEditing] = useState<CorporateMemberRow | null>(null);
   const { pendingId: pendingDeleteId, start: startDelete, cancel: cancelDelete } = usePendingDelete();
   const router = useRouter();
+
+  function handleEditDone() {
+    setEditing(null);
+    router.refresh();
+  }
 
   function clearRowError(id: string) {
     setRowError((prev) => {
@@ -253,6 +260,10 @@ function CorporateTable({ members }: { members: CorporateMemberRow[] }) {
   }
 
   return (
+    <>
+    {editing && (
+      <CorporateEditForm member={editing} onDone={handleEditDone} onCancel={() => setEditing(null)} />
+    )}
     <table className="hist-table">
       <thead>
         <tr>
@@ -349,20 +360,26 @@ function CorporateTable({ members }: { members: CorporateMemberRow[] }) {
                   </button>
                 </div>
               ) : (
-                <button
-                  className="btn btn-ghost btn-sm"
-                  style={{ marginTop: 6, color: "#c33" }}
-                  onClick={() => handleDelete(m)}
-                  disabled={pending}
-                >
-                  Delete
-                </button>
+                <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", marginTop: 6 }}>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setEditing(m)} disabled={pending}>
+                    Edit
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    style={{ color: "#c33" }}
+                    onClick={() => handleDelete(m)}
+                    disabled={pending}
+                  >
+                    Delete
+                  </button>
+                </div>
               )}
             </td>
           </tr>
         ))}
       </tbody>
     </table>
+    </>
   );
 }
 

@@ -7,6 +7,7 @@ import { ageFrom } from "@/lib/validation";
 import { downloadCsv, type CsvColumn } from "@/lib/csv";
 import { usePendingDelete } from "@/lib/usePendingDelete";
 import RecentlyDeleted from "./RecentlyDeleted";
+import VolunteerEditForm from "./VolunteerEditForm";
 import type { VolunteerRow } from "@/lib/supabase/types";
 
 const CSV_COLUMNS: CsvColumn<VolunteerRow>[] = [
@@ -118,8 +119,14 @@ function VolunteerSearchView() {
 function VolunteersTable({ volunteers }: { volunteers: VolunteerRow[] }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<VolunteerRow | null>(null);
   const { pendingId: pendingDeleteId, start: startDelete, cancel: cancelDelete } = usePendingDelete();
   const router = useRouter();
+
+  function handleEditDone() {
+    setEditing(null);
+    router.refresh();
+  }
 
   function handleDelete(v: VolunteerRow) {
     if (!confirm(`Delete ${v.name}'s volunteer registration?`)) return;
@@ -146,6 +153,9 @@ function VolunteersTable({ volunteers }: { volunteers: VolunteerRow[] }) {
 
   return (
     <>
+    {editing && (
+      <VolunteerEditForm volunteer={editing} onDone={handleEditDone} onCancel={() => setEditing(null)} />
+    )}
     {error && (
       <div className="notice warn" style={{ marginBottom: 16 }}>
         {error}
@@ -196,9 +206,14 @@ function VolunteersTable({ volunteers }: { volunteers: VolunteerRow[] }) {
                   </button>
                 </span>
               ) : (
-                <button className="btn btn-ghost btn-sm" onClick={() => handleDelete(v)} disabled={pending}>
-                  Delete
-                </button>
+                <>
+                  <button className="btn btn-ghost btn-sm" style={{ marginRight: 6 }} onClick={() => setEditing(v)} disabled={pending}>
+                    Edit
+                  </button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => handleDelete(v)} disabled={pending}>
+                    Delete
+                  </button>
+                </>
               )}
             </td>
           </tr>
