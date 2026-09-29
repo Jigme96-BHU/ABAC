@@ -18,23 +18,27 @@ export default async function EventsPage() {
   const supabase = await createClient();
   const today = new Date().toISOString().slice(0, 10);
 
-  const { data: rows } = await supabase
-    .from("events")
-    .select("*")
-    .eq("published", true)
-    .is("deleted_at", null)
-    .gte("date", today)
-    .order("date", { ascending: true })
-    .returns<DBEventRow[]>();
+  // Independent of each other, so fetched in parallel rather than paying
+  // two sequential round-trips to Supabase.
+  const [{ data: rows }, allStories] = await Promise.all([
+    supabase
+      .from("events")
+      .select("*")
+      .eq("published", true)
+      .is("deleted_at", null)
+      .gte("date", today)
+      .order("date", { ascending: true })
+      .returns<DBEventRow[]>(),
+    // Capped so this page's query and render cost stay bounded as the
+    // committee's archive grows — a community association posting a handful
+    // of write-ups a year won't hit this for a long while. Once it does,
+    // replace the cap with real pagination.
+    getAllStories(30),
+  ]);
 
   const upcoming = (rows ?? []).map(fromRow);
   const groups = byMonth(upcoming);
   const now = new Date();
-  // Capped so this page's query and render cost stay bounded as the
-  // committee's archive grows — a community association posting a handful
-  // of write-ups a year won't hit this for a long while. Once it does,
-  // replace the cap with real pagination.
-  const allStories = await getAllStories(30);
 
   return (
     <main>

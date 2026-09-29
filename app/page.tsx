@@ -11,19 +11,23 @@ import EventRow from "@/components/EventRow";
 import RoyalPortrait from "@/components/RoyalPortrait";
 
 export default async function HomePage() {
-  const latest = await getAllStories(4);
-
   const supabase = await createClient();
   const today = new Date().toISOString().slice(0, 10);
-  const { data: upcomingRows } = await supabase
-    .from("events")
-    .select("*")
-    .eq("published", true)
-    .is("deleted_at", null)
-    .gte("date", today)
-    .order("date", { ascending: true })
-    .limit(4)
-    .returns<DBEventRow[]>();
+
+  // Independent of each other, so fetched in parallel rather than paying
+  // two sequential round-trips to Supabase.
+  const [latest, { data: upcomingRows }] = await Promise.all([
+    getAllStories(4),
+    supabase
+      .from("events")
+      .select("*")
+      .eq("published", true)
+      .is("deleted_at", null)
+      .gte("date", today)
+      .order("date", { ascending: true })
+      .limit(4)
+      .returns<DBEventRow[]>(),
+  ]);
   const upcoming = (upcomingRows ?? []).map(fromRow);
 
   return (
