@@ -294,6 +294,14 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold)}
 
 footer{background:var(--gd-deep);color:#C7BC9C;padding:48px 0 32px;margin-top:40px}
 footer .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:28px;margin-bottom:32px}
+/* Below ~200px-per-column, auto-fit collapses to a single column and the
+   five sections stack into one long scroll. Force two columns instead,
+   with the brand block alone on its own row — it reads as a header, not
+   another list, so pairing it with a link column looked odd. */
+@media(max-width:640px){
+  footer .cols{grid-template-columns:repeat(2,1fr);gap:28px 20px}
+  footer .cols>div:first-child{grid-column:1/-1}
+}
 footer h4{font-family:var(--font-cinzel),serif;color:#fff;font-size:16px;margin-bottom:12px}
 footer a{color:#C7BC9C;text-decoration:none;font-size:13.5px;display:block;padding:3px 0}
 footer a:hover{color:var(--gold-bright)}
