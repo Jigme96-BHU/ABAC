@@ -8,7 +8,7 @@ export const NAV: NavItem[] = [
   { href: "/join", label: "Join", header: true },
   { href: "/services", label: "Services", header: true },
   { href: "/team", label: "Leadership", header: true },
-  { href: "/donate", label: "Donate", header: false },
+  { href: "/donate", label: "Welfare Contributions", header: false },
   { href: "/contact", label: "Contact", header: true },
 ];
 
