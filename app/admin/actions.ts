@@ -11,6 +11,7 @@ import { formatMemberNo, formatDate } from "@/lib/member-number";
 import { CORPORATE_TIER_FEES_CENTS, corporateTierLabel, type CorporateTier } from "@/lib/corporate-tiers";
 import { serviceTypeLabel } from "@/lib/service-types";
 import { removeStorageObjects, storageKeyFromPublicUrl } from "@/lib/storage-cleanup";
+import { isValidCid } from "@/lib/validation";
 import type {
   EventRow,
   StoryRow,
@@ -1428,6 +1429,59 @@ export async function searchMembers(query: string): Promise<{ error: string | nu
     .slice(0, 50);
 
   return { error: null, results };
+}
+
+export type MemberEditableFields = {
+  name: string;
+  email: string;
+  gender: string;
+  date_of_birth: string;
+  cid: string;
+  phone: string;
+  suburb: string;
+};
+
+/** Corrects personal details a member mistyped at registration — name,
+ *  email, gender, date of birth, CID, phone, suburb. Deliberately doesn't
+ *  touch status, fee, membership type, or dates: those reflect what
+ *  actually happened (what was paid, when), not something a typo could
+ *  cause, and changing them here would silently desync the record from
+ *  what Stripe and the confirmation email already said. */
+export async function updateMember(
+  id: string,
+  input: MemberEditableFields
+): Promise<{ error: string | null; member: MemberRow | null }> {
+  const name = input.name.trim();
+  const email = input.email.trim();
+  const cid = input.cid.trim();
+  const phone = input.phone.trim();
+  const suburb = input.suburb.trim();
+  const gender = input.gender.trim();
+
+  if (!name) return { error: "Name is required.", member: null };
+  if (!email) return { error: "Email is required.", member: null };
+  if (!input.date_of_birth) return { error: "Date of birth is required.", member: null };
+  if (!isValidCid(cid)) return { error: "CID must be exactly 11 digits.", member: null };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("members")
+    .update({
+      name,
+      email,
+      gender: gender || null,
+      date_of_birth: input.date_of_birth,
+      cid,
+      phone: phone || null,
+      suburb: suburb || null,
+    })
+    .eq("id", id)
+    .select()
+    .single<MemberRow>();
+  if (error) return { error: error.message, member: null };
+
+  revalidatePath("/admin");
+  return { error: null, member: data };
 }
 
 export async function deleteMember(id: string): Promise<{ error: string | null }> {
