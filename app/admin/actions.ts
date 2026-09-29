@@ -11,7 +11,7 @@ import { formatMemberNo, formatDate } from "@/lib/member-number";
 import { CORPORATE_TIER_FEES_CENTS, corporateTierLabel, type CorporateTier } from "@/lib/corporate-tiers";
 import { serviceTypeLabel } from "@/lib/service-types";
 import { removeStorageObjects, storageKeyFromPublicUrl } from "@/lib/storage-cleanup";
-import { isValidCid } from "@/lib/validation";
+import { ageFrom, isValidCid } from "@/lib/validation";
 import type {
   EventRow,
   StoryRow,
@@ -620,9 +620,88 @@ export async function getDeletedDocuments(): Promise<{ error: string | null; doc
 }
 
 // ---------------------------------------------------------------------------
-// Volunteers — admin can only view/delete; the registration itself is
-// public (see app/volunteers/actions.ts), so there's no create/update here.
+// Volunteers — registration itself is public (see app/volunteers/actions.ts);
+// updateVolunteer below only corrects typos in an existing record, it can't
+// create one.
 // ---------------------------------------------------------------------------
+
+export type VolunteerEditableFields = {
+  name: string;
+  sex: string;
+  date_of_birth: string;
+  cid: string;
+  phone: string;
+  email: string;
+  guardian_name: string;
+  guardian_phone: string;
+  guardian_email: string;
+};
+
+/** Same shape/validation as the public registration (app/volunteers/actions.ts)
+ *  — is_minor is recomputed from date_of_birth rather than taken as input,
+ *  since it must always agree with it. guardian_consent is left untouched:
+ *  it's a one-time confirmation a guardian gave at registration, not
+ *  something this correction form should be able to silently grant. */
+export async function updateVolunteer(
+  id: string,
+  input: VolunteerEditableFields
+): Promise<{ error: string | null; volunteer: VolunteerRow | null }> {
+  const name = input.name.trim();
+  const sex = input.sex.trim();
+  const cid = input.cid.trim();
+  const phone = input.phone.trim();
+  const email = input.email.trim();
+  const dob = input.date_of_birth;
+
+  if (!name || !sex || !dob || !cid || !phone || !email) {
+    return { error: "Please fill in every field.", volunteer: null };
+  }
+  if (!isValidCid(cid)) return { error: "CID must be exactly 11 digits.", volunteer: null };
+
+  const age = ageFrom(dob);
+  if (age < 0 || age > 130) {
+    return { error: "That date of birth doesn't look right — please check it.", volunteer: null };
+  }
+
+  const isMinor = age < 18;
+  let guardianName: string | null = null;
+  let guardianPhone: string | null = null;
+  let guardianEmail: string | null = null;
+  if (isMinor) {
+    guardianName = input.guardian_name.trim();
+    guardianPhone = input.guardian_phone.trim();
+    guardianEmail = input.guardian_email.trim();
+    if (!guardianName || !guardianPhone || !guardianEmail) {
+      return {
+        error: "Since the volunteer is under 18, a parent/guardian's name, phone, and email are required.",
+        volunteer: null,
+      };
+    }
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("volunteers")
+    .update({
+      name,
+      sex,
+      date_of_birth: dob,
+      cid,
+      phone,
+      email,
+      is_minor: isMinor,
+      guardian_name: guardianName,
+      guardian_phone: guardianPhone,
+      guardian_email: guardianEmail,
+    })
+    .eq("id", id)
+    .select()
+    .single<VolunteerRow>();
+  if (error) return { error: error.message, volunteer: null };
+
+  revalidatePath("/admin");
+  return { error: null, volunteer: data };
+}
 
 export async function deleteVolunteer(id: string) {
   const supabase = await createClient();
@@ -1705,6 +1784,64 @@ export async function searchCorporateMembers(query: string): Promise<{ error: st
  *  insert privilege here, only the same shape every application takes.
  *  Still needs the normal Approve step (Stripe payment link) before it's
  *  active — this does not skip payment. */
+export type CorporateEditableFields = {
+  business_name: string;
+  abn: string;
+  website: string;
+  contact_name: string;
+  contact_role: string;
+  email: string;
+  phone: string;
+  address: string;
+  notes: string;
+};
+
+/** Corrects business/contact details only. Deliberately excludes tier and
+ *  status: tier sets the fee an active sponsor already paid via Stripe, and
+ *  status is driven by the Approve/Reject workflow buttons — changing
+ *  either here would desync the record from what was actually charged or
+ *  decided. */
+export async function updateCorporateMember(
+  id: string,
+  input: CorporateEditableFields
+): Promise<{ error: string | null; member: CorporateMemberRow | null }> {
+  const businessName = input.business_name.trim();
+  const contactName = input.contact_name.trim();
+  const email = input.email.trim();
+  const phone = input.phone.trim();
+  const abn = input.abn.trim();
+  const website = input.website.trim();
+  const contactRole = input.contact_role.trim();
+  const address = input.address.trim();
+  const notes = input.notes.trim();
+
+  if (!businessName || !contactName || !email || !phone) {
+    return { error: "Please fill in business name, contact name, email, and phone.", member: null };
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("corporate_members")
+    .update({
+      business_name: businessName,
+      abn: abn || null,
+      website: website || null,
+      contact_name: contactName,
+      contact_role: contactRole || null,
+      email,
+      phone,
+      address: address || null,
+      notes: notes || null,
+    })
+    .eq("id", id)
+    .select()
+    .single<CorporateMemberRow>();
+  if (error) return { error: error.message, member: null };
+
+  revalidatePath("/admin");
+  return { error: null, member: data };
+}
+
 export async function createCorporateMemberManually(formData: FormData): Promise<{ error: string | null }> {
   const businessName = String(formData.get("business_name") ?? "").trim();
   const abn = String(formData.get("abn") ?? "").trim();
