@@ -18,6 +18,7 @@ import { formatMemberNo, formatDate } from "@/lib/member-number";
 import { serviceTypeLabel } from "@/lib/service-types";
 import { usePendingDelete } from "@/lib/usePendingDelete";
 import RecentlyDeleted from "./RecentlyDeleted";
+import MemberEditForm from "./MemberEditForm";
 import type { MemberRow } from "@/lib/supabase/types";
 
 function memberNo(m: MemberRow): string {
@@ -105,6 +106,7 @@ function MemberSearchView({
   const [results, setResults] = useState<MemberRow[]>(recentMembers);
   const [searched, setSearched] = useState(false);
   const [detail, setDetail] = useState<MemberDetail | null>(null);
+  const [editing, setEditing] = useState<MemberRow | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [resendMessage, setResendMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -163,6 +165,12 @@ function MemberSearchView({
     });
   }
 
+  function handleEditDone(updated: MemberRow) {
+    setEditing(null);
+    setResults((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+    setDetail((d) => (d && d.member.id === updated.id ? { ...d, member: updated } : d));
+  }
+
   function handleDelete(m: MemberRow) {
     if (!confirm(`Delete ${m.name}'s membership record permanently?`)) return;
     setError(null);
@@ -204,10 +212,13 @@ function MemberSearchView({
         </div>
       )}
 
-      {detail ? (
+      {editing ? (
+        <MemberEditForm member={editing} onDone={handleEditDone} onCancel={() => setEditing(null)} />
+      ) : detail ? (
         <MemberDetailPanel
           detail={detail}
           onClose={() => setDetail(null)}
+          onEdit={() => setEditing(detail.member)}
           onResend={handleResend}
           onDelete={handleDelete}
           onCancelDelete={cancelDelete}
@@ -254,6 +265,9 @@ function MemberSearchView({
                       <button className="btn btn-ghost btn-sm" style={{ marginRight: 6 }} onClick={() => openDetail(m.id)} disabled={pending}>
                         View
                       </button>
+                      <button className="btn btn-ghost btn-sm" style={{ marginRight: 6 }} onClick={() => setEditing(m)} disabled={pending}>
+                        Edit
+                      </button>
                       <button className="btn btn-ghost btn-sm" onClick={() => handleDelete(m)} disabled={pending}>
                         Delete
                       </button>
@@ -279,6 +293,7 @@ function MemberSearchView({
 function MemberDetailPanel({
   detail,
   onClose,
+  onEdit,
   onResend,
   onDelete,
   onCancelDelete,
@@ -288,6 +303,7 @@ function MemberDetailPanel({
 }: {
   detail: MemberDetail;
   onClose: () => void;
+  onEdit: () => void;
   onResend: (memberId: string) => void;
   onDelete: (member: MemberRow) => void;
   onCancelDelete: () => void;
@@ -374,6 +390,9 @@ function MemberDetailPanel({
       )}
 
       <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+        <button className="btn btn-ghost btn-sm" onClick={onEdit} disabled={pending}>
+          Edit details
+        </button>
         {member.status === "active" && (
           <button className="btn btn-ghost btn-sm" onClick={() => onResend(member.id)} disabled={pending}>
             Resend confirmation email
