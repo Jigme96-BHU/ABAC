@@ -3,7 +3,7 @@ import DonateForm from "@/components/DonateForm";
 import { stripeDonations } from "@/lib/stripe";
 
 export const metadata: Metadata = {
-  title: "Donate",
+  title: "Welfare Contributions",
   description:
     "Donations to the Australia–Bhutan Association of Canberra fund welfare support and cultural programs for the Bhutanese community in the ACT.",
 };
@@ -19,10 +19,10 @@ export default async function DonatePage({ searchParams }: Props) {
         <div className="wrap">
           <div className="form-card">
             <span className="dz-eyebrow">ཕན་བདེའི་ཞལ་འདེབས།</span>
-            <h2>Donate</h2>
+            <h2>Welfare Contributions</h2>
             <p className="form-sub">
-              Donations are separate from membership and fund welfare support and cultural
-              programs. You don&apos;t need an account.
+              Donations are separate from membership and fund welfare support and community
+              emergencies. You don&apos;t need an account.
             </p>
 
             {canceled && (

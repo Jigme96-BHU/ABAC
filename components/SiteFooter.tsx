@@ -43,7 +43,7 @@ export default function SiteFooter() {
             <Link href="/events">Events &amp; highlights</Link>
             <Link href="/volunteers">Volunteer registration</Link>
             <Link href="/partners">Our Partners</Link>
-            <Link href="/donate">Donate</Link>
+            <Link href="/donate">Welfare Contributions</Link>
             <Link href="/contact">Contact us</Link>
           </div>
 
