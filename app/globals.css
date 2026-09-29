@@ -334,8 +334,25 @@ footer .fine{border-top:1px solid rgba(255,255,255,.15);padding-top:20px;font-si
 .hist-table{width:100%;font-size:13.5px;border-collapse:collapse;margin-top:12px}
 .hist-table th{text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:1px;color:var(--ink-soft);padding:6px 14px 6px 0;border-bottom:1px solid var(--line)}
 .hist-table td{padding:8px 14px 8px 0;border-bottom:1px solid #EAE4D3}
-@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 :focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+
+/* Fades in each page's root element as it mounts — Next.js swaps route
+   content with a hard DOM replacement (old content removed, new content
+   inserted) with no animation of its own. This targets the direct child of
+   the persistent wrapper in layout.tsx, so it fires on every fresh mount:
+   the loading.tsx interstitial appearing, and then the real page replacing
+   it, not just the very first page load. */
+.page-fade>*{animation:page-fade-in .22s ease-out both}
+@keyframes page-fade-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+
+/* Top loading bar — gives a click immediate feedback while the outgoing
+   page is otherwise frozen with no indication a navigation is pending. */
+.route-progress{position:fixed;top:0;left:0;height:3px;width:0;background:var(--gold);z-index:200;opacity:0;pointer-events:none}
+.route-progress-loading{width:85%;opacity:1;transition:width 4s cubic-bezier(.1,.6,.2,1),opacity .15s ease}
+.route-progress-done{width:100%;opacity:1;transition:width .15s ease-out,opacity .15s ease .1s}
+.route-progress-idle{width:0;opacity:0;transition:opacity .1s ease}
+@media(prefers-reduced-motion:reduce){.route-progress{display:none}}
 
 /* ---- Royal treatment ---- */
 h1,h2,h3{letter-spacing:.5px}

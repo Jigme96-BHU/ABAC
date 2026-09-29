@@ -7,6 +7,7 @@ import { SITE_URL } from "@/lib/site-url";
 import SiteHeader from "@/components/SiteHeader";
 import SiteFooter from "@/components/SiteFooter";
 import ChatWidget from "@/components/ChatWidget";
+import RouteProgress from "@/components/RouteProgress";
 import "./globals.css";
 
 const cinzel = Cinzel({
@@ -74,8 +75,9 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body>
+        <RouteProgress />
         <SiteHeader />
-        {children}
+        <div className="page-fade">{children}</div>
         <SiteFooter />
         <ChatWidget />
         <Analytics />
