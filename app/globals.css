@@ -252,6 +252,17 @@ input[type=text],input[type=email],input[type=date],select,textarea{width:100%;p
 input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold)}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 @media(max-width:560px){.two{grid-template-columns:1fr}.form-card{padding:24px 18px}.cta-band{padding:28px 22px}}
+
+/* A dependent child row (name, DOB, CID, remove) — its own class rather
+   than reusing .two, since its 4-column layout used to be set via an
+   inline style that overrode .two's own mobile collapse, leaving the date
+   input with no room on a phone and overlapping the CID field next to it. */
+.child-row{display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:10px;align-items:end;margin-bottom:10px}
+@media(max-width:560px){
+  .child-row{grid-template-columns:1fr 1fr;row-gap:8px}
+  .child-row>div:first-child{grid-column:1/-1}
+  .child-row>button{grid-column:1/-1;justify-self:end}
+}
 .switch-box{border:1.5px solid var(--line);border-radius:11px;padding:16px 18px;background:#FFFEF9}
 .switch-box>summary{cursor:pointer;font-size:14px;font-weight:600;color:var(--gd)}
 .switch-box[open]>summary{margin-bottom:4px}

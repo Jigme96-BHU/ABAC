@@ -215,11 +215,7 @@ export default function JoinForm() {
             Children under 18
           </label>
           {children.map((key, i) => (
-            <div
-              key={key}
-              className="two"
-              style={{ gridTemplateColumns: "2fr 1fr 1fr auto", alignItems: "end", marginBottom: 10 }}
-            >
+            <div key={key} className="child-row">
               <div>
                 {i === 0 && (
                   <label className="f" style={{ marginTop: 0 }}>
