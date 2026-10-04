@@ -307,32 +307,32 @@ export default function SwitchCategoryForm() {
           <label className="f" style={{ marginTop: 20 }}>
             Children under 18
           </label>
-          {children.map((key, i) => (
+          {children.map((key) => (
             <div key={key} className="child-row">
               <div>
-                {i === 0 && (
-                  <label className="f" style={{ marginTop: 0 }}>
-                    Name
-                  </label>
-                )}
-                <input name="child_name" type="text" placeholder="Child's full name" />
+                <label className="f" style={{ marginTop: 0 }}>
+                  Name
+                </label>
+                <input
+                  name="child_name"
+                  type="text"
+                  aria-label="Child's name"
+                  placeholder="Child's full name"
+                />
               </div>
               <div>
-                {i === 0 && (
-                  <label className="f" style={{ marginTop: 0 }}>
-                    Date of birth
-                  </label>
-                )}
-                <input name="child_dob" type="date" />
+                <label className="f" style={{ marginTop: 0 }}>
+                  Date of birth
+                </label>
+                <input name="child_dob" type="date" aria-label="Child's date of birth" />
               </div>
               <div>
-                {i === 0 && (
-                  <label className="f" style={{ marginTop: 0 }}>
-                    CID
-                  </label>
-                )}
+                <label className="f" style={{ marginTop: 0 }}>
+                  CID
+                </label>
                 <input
                   name="child_cid"
+                  aria-label="Child's CID"
                   type="text"
                   inputMode="numeric"
                   pattern="\d{11}"

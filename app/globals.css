@@ -250,27 +250,30 @@ section.block.alt{background:#F4F0E4}
 label.f{display:block;font-size:13px;font-weight:600;margin:16px 0 6px}
 input[type=text],input[type=email],input[type=date],select,textarea{width:100%;padding:12px 14px;border:1.5px solid var(--line);border-radius:9px;font-family:inherit;font-size:15px;background:#FFFEF9;color:var(--ink)}
 input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold)}
+/* Every single-line field gets one height. Left alone, a native date input
+   and a <select> size themselves differently from a text input (47px vs
+   45px here, and further apart on iOS, which also ignores padding on a
+   date input until its native appearance is reset). */
+input[type=text],input[type=email],input[type=date],select{min-height:48px;line-height:1.2}
+input[type=date]{-webkit-appearance:none;appearance:none;display:block;min-width:0;max-width:100%;text-align:left}
+input[type=date]::-webkit-date-and-time-value{text-align:left;min-height:1.2em;margin:0}
+input[type=date]::-webkit-datetime-edit{padding:0}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 @media(max-width:560px){.two{grid-template-columns:1fr}.form-card{padding:24px 18px}.cta-band{padding:28px 22px}}
 
-/* A dependent child row (name, DOB, CID, remove) — its own class rather
-   than reusing .two, since its 4-column layout used to be set via an
-   inline style that overrode .two's own mobile collapse, leaving the date
-   input with no room on a phone and overlapping the CID field next to it. */
-.child-row{display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:10px;align-items:end;margin-bottom:10px}
+/* A dependent child: name on its own line, then date of birth and CID side
+   by side only while each can get at least 150px — enough for a native date
+   control — and stacked when they can't. One rule for every screen: the
+   form card is narrow even on a laptop, so a fixed four-across row left the
+   date field ~95px wide everywhere, and a percentage split can't promise a
+   native date picker (which has its own minimum width, much wider on iOS)
+   the room it needs. Every child carries its own labels, so a stacked row
+   never has an unlabelled field. */
+.child-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(max(150px,calc(50% - 5px)),1fr));gap:12px 10px;padding:14px 0 16px}
 .child-row>div{min-width:0}
-@media(max-width:560px){
-  /* A native date picker (especially on real iOS Safari, which renders much
-     wider than desktop browsers emulating a phone viewport) has its own
-     intrinsic minimum width. Grid items default to min-width:auto, which
-     lets that intrinsic width win over the 1fr track and spill into the
-     next column — min-width:0 above forces the track to actually be
-     honored instead. The 5fr/7fr split then gives the date field a touch
-     less room and CID a touch more, rather than a plain 50/50. */
-  .child-row{grid-template-columns:5fr 7fr;row-gap:8px}
-  .child-row>div:first-child{grid-column:1/-1}
-  .child-row>button{grid-column:1/-1;justify-self:end}
-}
+.child-row+.child-row{border-top:1px solid var(--line)}
+.child-row>div:first-child{grid-column:1/-1}
+.child-row>button{grid-column:1/-1;justify-self:end}
 .switch-box{border:1.5px solid var(--line);border-radius:11px;padding:16px 18px;background:#FFFEF9}
 .switch-box>summary{cursor:pointer;font-size:14px;font-weight:600;color:var(--gd)}
 .switch-box[open]>summary{margin-bottom:4px}
