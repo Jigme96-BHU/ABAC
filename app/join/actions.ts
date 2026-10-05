@@ -573,7 +573,11 @@ export async function submitCategorySwitch(formData: FormData): Promise<SubmitRe
     return { error: "Couldn't start checkout — please try again." };
   }
 
-  const { error } = await supabase.rpc("submit_category_switch", {
+  // A paid switch only records the request against the Stripe session — the
+  // household is built and the switch applied once payment is confirmed, so an
+  // abandoned checkout leaves the member and the numbering untouched. See
+  // 0033_defer_category_switch_members_until_paid.sql.
+  const { error } = await supabase.rpc("register_category_switch_checkout", {
     p_household_id: householdId,
     p_session_id: session.id,
     p_fee_cents: dueCents,
