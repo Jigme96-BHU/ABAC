@@ -66,10 +66,12 @@ export async function submitMembership(formData: FormData): Promise<SubmitResult
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:4321";
 
   // The members table has no public SELECT or UPDATE policy — CID, DOB and
-  // phone stay admin-only, by design. The SECURITY DEFINER RPC below handles
-  // the narrow server-side write path: first registration creates a permanent
+  // phone stay admin-only, by design. SECURITY DEFINER RPCs handle the narrow
+  // server-side write path: a first registration creates a permanent
   // membership number; later submissions with the same DOB + CID renew
-  // that same member instead of assigning a new number.
+  // that same member instead of assigning a new number. A paid registration
+  // only creates its member once the payment is confirmed (below); a free
+  // under-18 one has nothing to wait for, so it's created straight away.
   const id = crypto.randomUUID();
 
   // Under 18 — no payment needed, membership is active immediately.
@@ -134,17 +136,25 @@ export async function submitMembership(formData: FormData): Promise<SubmitResult
     return { error: "Couldn't start checkout — please try again." };
   }
 
-  const { error } = await supabase.rpc("submit_membership_registration", {
-    p_member_id: id,
-    p_email: email,
-    p_name: name,
-    p_gender: gender || null,
-    p_dob: dob,
-    p_cid: cid,
-    p_phone: phone || null,
-    p_suburb: suburb || null,
-    p_fee_cents: feeCents,
+  // Records what was submitted against the Stripe session — nothing is
+  // written to `members` (and so no membership number is handed out) until
+  // Stripe confirms payment; see 0032_defer_member_creation_until_paid.sql.
+  const { error } = await supabase.rpc("register_membership_checkout", {
     p_session_id: session.id,
+    p_fee_cents: feeCents,
+    p_household_id: null,
+    p_members: [
+      {
+        member_id: id,
+        email,
+        name,
+        gender: gender || null,
+        dob,
+        cid,
+        phone: phone || null,
+        suburb: suburb || null,
+      },
+    ],
   });
   if (error) return { error: error.message };
 
@@ -156,8 +166,9 @@ export async function submitMembership(formData: FormData): Promise<SubmitResult
 // for the whole household (Membership Policy §2.2, §3.4.1). Every adult is
 // individually recorded with their own DOB/CID (own eligibility, own renewal
 // matching, own email); children are recorded too but never pay, vote, or
-// receive their own email. One Stripe Checkout covers the whole household —
-// see submit_family_registration (0009_family_membership.sql).
+// receive their own email. One Stripe Checkout covers the whole household,
+// and nobody is created until it's paid — see register_membership_checkout and
+// activate_membership_checkout (0032_defer_member_creation_until_paid.sql).
 // ---------------------------------------------------------------------------
 
 /** Every adult in the household posts under the same repeated field names
@@ -339,10 +350,12 @@ async function submitFamilyMembership(formData: FormData): Promise<SubmitResult>
     return { error: "Couldn't start checkout — please try again." };
   }
 
-  const { error } = await supabase.rpc("submit_family_registration", {
-    p_household_id: householdId,
+  // Same as the single path: the household is only recorded against the
+  // Stripe session here, and every member (and number) is created on payment.
+  const { error } = await supabase.rpc("register_membership_checkout", {
     p_session_id: session.id,
     p_fee_cents: FAMILY_FEE_CENTS,
+    p_household_id: householdId,
     p_members: members,
   });
   if (error) return { error: error.message };
