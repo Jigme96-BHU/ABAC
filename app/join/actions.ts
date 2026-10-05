@@ -578,9 +578,12 @@ export async function submitCategorySwitch(formData: FormData): Promise<SubmitRe
 // low-sensitivity fields ever come back).
 // ---------------------------------------------------------------------------
 
+/** memberNo is null while the status is "pending": a number only means
+ *  something once payment has been confirmed, and until then it's not
+ *  something to show — or even send to the browser. */
 export type StatusResult =
   | { found: false }
-  | { found: true; memberNo: string; status: "pending" | "active" | "expired"; expiresAt: string | null };
+  | { found: true; memberNo: string | null; status: "pending" | "active" | "expired"; expiresAt: string | null };
 
 export async function checkMembershipStatus(formData: FormData): Promise<StatusResult> {
   const email = String(formData.get("email") ?? "").trim();
@@ -595,10 +598,11 @@ export async function checkMembershipStatus(formData: FormData): Promise<StatusR
 
   if (!data) return { found: false };
 
+  const status = data.effective_status as "pending" | "active" | "expired";
   return {
     found: true,
-    memberNo: formatMemberNo(data.member_no, data.member_year),
-    status: data.effective_status as "pending" | "active" | "expired",
+    memberNo: status === "pending" ? null : formatMemberNo(data.member_no, data.member_year),
+    status,
     expiresAt: data.expires_at,
   };
 }

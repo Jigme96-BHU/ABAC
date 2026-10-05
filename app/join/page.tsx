@@ -6,6 +6,7 @@ import MembershipRegistration from "@/components/MembershipRegistration";
 import CorporateForm from "@/components/CorporateForm";
 import CorporateStatusCheck from "@/components/CorporateStatusCheck";
 import SwitchCategoryForm from "@/components/SwitchCategoryForm";
+import CanceledNotice from "@/components/CanceledNotice";
 
 export const metadata: Metadata = {
   title: "Join",
@@ -28,6 +29,8 @@ export default function JoinPage() {
               Register or renew in one step — your membership becomes active the moment
               payment succeeds, and your membership number stays with you for future renewals.
             </p>
+
+            <CanceledNotice />
 
             <MembershipRegistration
               community={

@@ -8,6 +8,7 @@ import { serviceRequestReceivedEmail } from "@/lib/emails/service-request-receiv
 import { formatMemberNo, formatDate } from "@/lib/member-number";
 import { corporateTierLabel } from "@/lib/corporate-tiers";
 import { serviceTypeLabel } from "@/lib/service-types";
+import { isPaidCheckoutEvent } from "@/lib/stripe-events";
 
 type ActivationRow = {
   did_activate: boolean;
@@ -63,7 +64,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: message }, { status: 400 });
   }
 
-  if (event.type === "checkout.session.completed") {
+  // Anything that isn't a settled payment (including a delayed-method session
+  // that's completed but not yet paid) is acknowledged and ignored here; the
+  // later async_payment_succeeded event is what activates it.
+  if (isPaidCheckoutEvent(event)) {
     const session = event.data.object;
     const supabase = await createClient();
 

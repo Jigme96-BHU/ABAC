@@ -78,7 +78,7 @@ export default function StatusCheckForm() {
                 }}
               >
                 <strong style={{ fontFamily: "var(--font-cinzel), serif", fontSize: 17 }}>
-                  {result.memberNo}
+                  {result.memberNo ?? "Registration found"}
                 </strong>
                 <span className={`badge ${result.status === "active" ? "active" : "due"}`}>
                   {STATUS_LABEL[result.status]}
@@ -86,10 +86,12 @@ export default function StatusCheckForm() {
               </div>
               <table>
                 <tbody>
-                  <tr>
-                    <td>Membership no.</td>
-                    <td>{result.memberNo}</td>
-                  </tr>
+                  {result.memberNo && (
+                    <tr>
+                      <td>Membership no.</td>
+                      <td>{result.memberNo}</td>
+                    </tr>
+                  )}
                   <tr>
                     <td>Status</td>
                     <td>{STATUS_LABEL[result.status]}</td>
@@ -108,6 +110,13 @@ export default function StatusCheckForm() {
                   )}
                 </tbody>
               </table>
+              {result.status === "pending" && (
+                <p className="notice warn" style={{ marginTop: 12, fontSize: 13 }}>
+                  We haven&apos;t received your payment yet, so there is no membership number to show.
+                  To finish, register again below with the same email, date of birth and CID — your
+                  membership number is issued as soon as the payment is confirmed.
+                </p>
+              )}
             </div>
           )}
         </div>
