@@ -63,7 +63,9 @@ export default function StatusCheckForm() {
 
           {result && !result.found && (
             <div className="notice warn" style={{ marginTop: 16 }}>
-              No matching record found. Check both details and try again.
+              No matching record found. Check both details and try again. If you started
+              registering but didn&apos;t finish paying, nothing has been created yet — just
+              register again below.
             </div>
           )}
 
