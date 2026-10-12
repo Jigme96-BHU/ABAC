@@ -87,7 +87,7 @@ export default function CorporateDashboard({ corporateMembers }: { corporateMemb
         onPermanentDelete={permanentlyDeleteCorporateMember}
         getLabel={(m) => m.business_name}
         getDeletedAt={(m) => m.deleted_at ?? m.updated_at}
-        noun="corporate members"
+        noun="corporate partners"
       />
     </div>
   );
@@ -558,11 +558,11 @@ function CorporateExportView() {
           return;
         }
         if (res.rows.length === 0) {
-          setMessage("No corporate members match those filters.");
+          setMessage("No corporate partners match those filters.");
           return;
         }
-        downloadCsv(res.rows, EXPORT_COLUMNS, "abac-corporate-members");
-        setMessage(`Exported ${res.rows.length} corporate members.`);
+        downloadCsv(res.rows, EXPORT_COLUMNS, "abac-corporate-partners");
+        setMessage(`Exported ${res.rows.length} corporate partners.`);
       } catch (err) {
         setMessage(`Couldn't export: ${err instanceof Error ? err.message : "please try again."}`);
       }

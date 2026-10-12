@@ -125,8 +125,8 @@ The site must not replace the live WordPress one until all of these are done.
       footer above Donate. Submissions are admin-only (same private-data
       model as `members`, not publicly readable) and appear in a new
       "Volunteers" tab in `/admin`, including a CSV export.
-- [x] **Run the corporate membership migration** (`0012_corporate_membership.sql`,
-      requires `0001`) — done, confirmed 2026-08-15. Adds **Corporate Membership** (Diamond / Platinum /
+- [x] **Run the corporate partnership migration** (`0012_corporate_membership.sql`,
+      requires `0001`) — done, confirmed 2026-08-15. Adds **Corporate Partnership** (Diamond / Platinum /
       Gold) — `/join` now leads with a Community vs Corporate choice, the
       existing Single/Family flow sits under Community unchanged. Corporate
       applications are **not** self-serve: they land as `pending` in a new
@@ -190,7 +190,7 @@ The site must not replace the live WordPress one until all of these are done.
       `reminder_expiry_sent` columns to `corporate_members` to track which
       reminders have been sent. The cron job
       `/api/corporate/expiry-reminders` runs daily and sends reminders. Also adds
-      a **Corporate Membership Status check** on the `/join` page where businesses
+      a **Corporate Partnership Status check** on the `/join` page where businesses
       can check their sponsorship status (Pending/Approved/Active/Expired) using
       business name + ABN + email. Status check form is collapsible by default.
       Expired (passed expiry date) memberships display as "Expired" status with
@@ -232,7 +232,7 @@ The site must not replace the live WordPress one until all of these are done.
       to `/volunteers` instead.
 - [ ] **Run the corporate business certificate migration**
       (`0022_corporate_business_certificate.sql`, requires `0012`). Adds an
-      optional **Business Certificate** upload to the Corporate Membership
+      optional **Business Certificate** upload to the Corporate Partnership
       application form, stored in a new private `corporate-documents` bucket
       (viewed by admins via a short-lived signed URL, same pattern as service
       documents — a business certificate can carry a registration number, so

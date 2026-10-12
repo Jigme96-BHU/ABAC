@@ -2,7 +2,7 @@ import { COLOR, escapeHtml, emailShell } from "./shared";
 
 /** Sent by the Stripe webhook once a corporate application's payment
  *  actually clears — this is the only point a business is a real, active
- *  Corporate Member, so this is where membership + congratulations +
+ *  Corporate Partner, so this is where membership + congratulations +
  *  gratitude all land together, same principle as lib/emails/welcome.ts. */
 export function corporateApprovedEmail({
   businessName,
@@ -19,18 +19,18 @@ export function corporateApprovedEmail({
   /** already formatted, e.g. "17 Jul 2027" */
   validUntil: string;
 }) {
-  const subject = "Welcome to ABAC Corporate Membership";
+  const subject = "Welcome to ABAC Corporate Partnership";
 
   const text = `Dear ${contactName},
 
 On behalf of the Australia–Bhutan Association of Canberra, we are pleased to confirm that
-${businessName} is now an ABAC Corporate Member at ${tier} tier.
+${businessName} is now an ABAC Corporate Partner at ${tier} tier.
 
 We sincerely thank you for your support. Partnerships such as this make ABAC's cultural
 programs, welfare support, and community events possible.
 
-Membership tier: ${tier}
-Membership fee: ${fee}
+Partnership tier: ${tier}
+Partnership fee: ${fee}
 Valid until: ${validUntil}
 
 Our committee will be in touch shortly regarding your listing on ABAC's Our Partners page and
@@ -51,7 +51,7 @@ bhutancanberra@gmail.com`;
     <p style="margin:0 0 16px;color:${COLOR.ink};font-size:15px">Dear ${escapeHtml(contactName)},</p>
     <p style="margin:0 0 20px;color:${COLOR.ink};font-size:15px;line-height:1.6">
       On behalf of the Australia&ndash;Bhutan Association of Canberra, we are pleased to confirm
-      that ${escapeHtml(businessName)} is now an ABAC Corporate Member at
+      that ${escapeHtml(businessName)} is now an ABAC Corporate Partner at
       <strong>${escapeHtml(tier)} tier</strong>.
     </p>
     <p style="margin:0 0 24px;color:${COLOR.ink};font-size:15px;line-height:1.6">
@@ -59,8 +59,8 @@ bhutancanberra@gmail.com`;
       cultural programs, welfare support, and community events possible.
     </p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid ${COLOR.line};border-radius:8px">
-      ${row("Membership tier", escapeHtml(tier))}
-      ${row("Membership fee", escapeHtml(fee))}
+      ${row("Partnership tier", escapeHtml(tier))}
+      ${row("Partnership fee", escapeHtml(fee))}
       ${row("Valid until", escapeHtml(validUntil), true)}
     </table>
     <p style="margin:20px 0;color:${COLOR.inkSoft};font-size:13.5px;line-height:1.7">

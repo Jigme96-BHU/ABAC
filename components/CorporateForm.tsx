@@ -149,7 +149,7 @@ export default function CorporateForm() {
   return (
     <div>
       <p style={{ color: "var(--ink-soft)", marginBottom: 20 }}>
-        A membership category for community businesses and any business entity that wants to
+        A partnership category for community businesses and any business entity that wants to
         support and partner with ABAC&apos;s cultural, welfare, and community programs. Open
         beyond the Bhutanese community. Choose a tier below to see its benefits and apply.
       </p>

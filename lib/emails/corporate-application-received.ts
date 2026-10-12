@@ -12,11 +12,11 @@ export function corporateApplicationReceivedEmail({
   contactName: string;
   tier: string;
 }) {
-  const subject = "We've received your Corporate Membership application — ABAC";
+  const subject = "We've received your Corporate Partnership application — ABAC";
 
   const text = `Dear ${contactName},
 
-Thank you for applying for ABAC Corporate Membership (${tier} tier) on behalf of ${businessName}.
+Thank you for applying for ABAC Corporate Partnership (${tier} tier) on behalf of ${businessName}.
 
 We've received your application and the committee will review it within 3 working days.
 We'll be in touch as soon as a decision is made.
@@ -28,7 +28,7 @@ bhutancanberra@gmail.com`;
   const body = `
     <p style="margin:0 0 16px;color:${COLOR.ink};font-size:15px">Dear ${escapeHtml(contactName)},</p>
     <p style="margin:0 0 24px;color:${COLOR.ink};font-size:15px;line-height:1.6">
-      Thank you for applying for ABAC Corporate Membership (<strong>${escapeHtml(tier)} tier</strong>)
+      Thank you for applying for ABAC Corporate Partnership (<strong>${escapeHtml(tier)} tier</strong>)
       on behalf of <strong>${escapeHtml(businessName)}</strong>.
     </p>
     <p style="margin:0 0 24px;color:${COLOR.ink};font-size:15px;line-height:1.6">
