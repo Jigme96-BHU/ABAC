@@ -1,6 +1,6 @@
 import { COLOR, escapeHtml, emailShell } from "./shared";
 
-/** Sent when the committee declines a Corporate Membership application —
+/** Sent when the committee declines a Corporate Partnership application —
  *  previously this branch sent no email at all, leaving the applicant with
  *  no closure. Deliberately brief and formal; no reason is given by default
  *  (the committee can follow up personally if one is warranted). */
@@ -13,11 +13,11 @@ export function corporateRejectedEmail({
   contactName: string;
   tier: string;
 }) {
-  const subject = "Update on your ABAC Corporate Membership application";
+  const subject = "Update on your ABAC Corporate Partnership application";
 
   const text = `Dear ${contactName},
 
-Thank you for your interest in ABAC Corporate Membership (${tier} tier) on behalf of
+Thank you for your interest in ABAC Corporate Partnership (${tier} tier) on behalf of
 ${businessName}, and for the time you took to submit an application.
 
 After review, the committee is unable to approve this application at this time.
@@ -34,7 +34,7 @@ bhutancanberra@gmail.com`;
   const body = `
     <p style="margin:0 0 16px;color:${COLOR.ink};font-size:15px">Dear ${escapeHtml(contactName)},</p>
     <p style="margin:0 0 20px;color:${COLOR.ink};font-size:15px;line-height:1.6">
-      Thank you for your interest in ABAC Corporate Membership
+      Thank you for your interest in ABAC Corporate Partnership
       (<strong>${escapeHtml(tier)} tier</strong>) on behalf of
       <strong>${escapeHtml(businessName)}</strong>, and for the time you took to submit an
       application.

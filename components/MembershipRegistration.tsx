@@ -42,7 +42,7 @@ export default function MembershipRegistration({
             onChange={() => setRegType("corporate")}
           />
           <span>
-            <strong>Corporate Membership</strong>&nbsp;— businesses &amp; organisations
+            <strong>Corporate Partnership</strong>&nbsp;— businesses &amp; organisations
           </span>
         </label>
       </div>

@@ -260,7 +260,7 @@ export default function BulkEmailForm() {
                 fontSize: 13,
               }}
             >
-              Corporate members
+              Corporate partners
             </button>
           </div>
         </div>

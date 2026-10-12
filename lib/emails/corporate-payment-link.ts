@@ -18,18 +18,18 @@ export function corporatePaymentLinkEmail({
   fee: string;
   paymentUrl: string;
 }) {
-  const subject = "Your ABAC Corporate Membership application has been approved";
+  const subject = "Your ABAC Corporate Partnership application has been approved";
 
   const text = `Dear ${contactName},
 
-Good news — ${businessName}'s application for ABAC Corporate Membership (${tier} tier) has been approved by the committee.
+Good news — ${businessName}'s application for ABAC Corporate Partnership (${tier} tier) has been approved by the committee.
 
-To activate your membership, please complete payment:
+To activate your partnership, please complete payment:
 ${paymentUrl}
 
-Membership fee: ${fee}
+Partnership fee: ${fee}
 
-Your Corporate Membership becomes active as soon as payment is confirmed.
+Your Corporate Partnership becomes active as soon as payment is confirmed.
 
 Tashi Delek,
 ABAC Committee
@@ -39,12 +39,12 @@ bhutancanberra@gmail.com`;
     <p style="margin:0 0 16px;color:${COLOR.ink};font-size:15px">Dear ${escapeHtml(contactName)},</p>
     <p style="margin:0 0 24px;color:${COLOR.ink};font-size:15px;line-height:1.6">
       Good news — <strong>${escapeHtml(businessName)}</strong>&rsquo;s application for ABAC
-      Corporate Membership (<strong>${escapeHtml(tier)} tier</strong>) has been approved by the
+      Corporate Partnership (<strong>${escapeHtml(tier)} tier</strong>) has been approved by the
       committee.
     </p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid ${COLOR.line};border-radius:8px;margin-bottom:24px">
       <tr>
-        <td style="padding:14px 24px;color:${COLOR.inkSoft};font-family:Georgia,serif;font-size:14px">Membership fee</td>
+        <td style="padding:14px 24px;color:${COLOR.inkSoft};font-family:Georgia,serif;font-size:14px">Partnership fee</td>
         <td style="padding:14px 24px;color:${COLOR.navy};font-family:Georgia,serif;font-size:16px;font-weight:700;text-align:right">${escapeHtml(fee)}</td>
       </tr>
     </table>
@@ -54,7 +54,7 @@ bhutancanberra@gmail.com`;
       </a>
     </p>
     <p style="margin:0 0 24px;color:${COLOR.inkSoft};font-size:13.5px;line-height:1.7">
-      Your Corporate Membership becomes active as soon as payment is confirmed.
+      Your Corporate Partnership becomes active as soon as payment is confirmed.
     </p>
     <p style="margin:0;color:${COLOR.ink};font-size:14px">
       Tashi Delek,<br />

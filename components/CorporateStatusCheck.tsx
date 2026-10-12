@@ -22,7 +22,7 @@ const STATUS_MESSAGE: Record<string, string> = {
   pending: "Your application is under review by the committee. You'll receive an email with next steps within 3 working days.",
   approved: "Your application has been approved — you'll receive a payment link by email to complete your sponsorship.",
   active: "Your sponsorship is active. Thank you for supporting ABAC!",
-  inactive: "Your sponsorship has expired. Use the Corporate Membership form below to renew.",
+  inactive: "Your sponsorship has expired. Use the Corporate Partnership form below to renew.",
   rejected: "Unfortunately, your application was not approved. Please contact bhutancanberra@gmail.com for details.",
 };
 
@@ -63,7 +63,7 @@ export default function CorporateStatusCheck() {
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
       >
-        Already a corporate member? Check my status
+        Already a corporate partner? Check my status
       </button>
 
       {open && (

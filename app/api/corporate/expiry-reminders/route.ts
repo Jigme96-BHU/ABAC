@@ -15,7 +15,7 @@ export async function GET(req: Request) {
   const supabase = await createClient();
 
   try {
-    // Get all active corporate members that expire soon or have just expired
+    // Get all active corporate partners that expire soon or have just expired
     // 14 days before expiry or today
     const today = new Date();
     const twoWeeksFromNow = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000);
@@ -30,7 +30,7 @@ export async function GET(req: Request) {
       .gte("expires_at", today.toISOString().split("T")[0]);
 
     if (fetchError) {
-      console.error("Error fetching corporate members:", fetchError);
+      console.error("Error fetching corporate partners:", fetchError);
       return Response.json({ error: fetchError.message }, { status: 500 });
     }
 

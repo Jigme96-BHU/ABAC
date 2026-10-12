@@ -625,7 +625,7 @@ export async function checkMembershipStatus(formData: FormData): Promise<StatusR
 }
 
 // ---------------------------------------------------------------------------
-// Corporate Membership — Diamond / Platinum / Gold. Unlike Single/Family,
+// Corporate Partnership — Diamond / Platinum / Gold. Unlike Single/Family,
 // this is never self-serve: an application goes to 'pending' and waits for
 // committee approval (see app/admin/actions.ts's approveCorporateMember)
 // before any payment happens. See supabase/migrations/0012_corporate_membership.sql.
@@ -767,7 +767,7 @@ export async function submitCorporateApplication(formData: FormData): Promise<Co
 }
 
 // ---------------------------------------------------------------------------
-// Corporate Membership Status Check
+// Corporate Partnership Status Check
 // ---------------------------------------------------------------------------
 
 export type CorporateStatusResult = {
@@ -800,7 +800,7 @@ export async function checkCorporateStatus(
   if (error) {
     if (error.code === "PGRST116") {
       // No rows found
-      return { found: false, error: "No corporate membership found with those details." };
+      return { found: false, error: "No corporate partnership found with those details." };
     }
     return { found: false, error: error.message };
   }

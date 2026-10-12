@@ -5,7 +5,7 @@ import { CORPORATE_TIERS } from "@/lib/corporate-tiers";
 
 export const metadata: Metadata = {
   title: "Our Partners",
-  description: "Businesses and organisations partnering with ABAC through Corporate Membership.",
+  description: "Businesses and organisations partnering with ABAC through Corporate Partnership.",
 };
 
 type PartnerRow = {
@@ -31,14 +31,14 @@ export default async function PartnersPage() {
         <div className="wrap">
           <h2 style={{ fontSize: 32, marginBottom: 6 }}>Our Partners</h2>
           <p style={{ color: "var(--ink-soft)", marginBottom: 28, maxWidth: 640 }}>
-            ABAC&apos;s Corporate Members support our cultural programs, welfare services, and
+            ABAC&apos;s Corporate Partners support our cultural programs, welfare services, and
             community events across Canberra.
           </p>
 
           {groups.length === 0 ? (
             <p style={{ color: "var(--ink-soft)" }}>
               No corporate partners listed yet — interested in becoming one?{" "}
-              <a href="/join">Apply for Corporate Membership</a>.
+              <a href="/join">Apply for Corporate Partnership</a>.
             </p>
           ) : (
             groups.map((group) => (

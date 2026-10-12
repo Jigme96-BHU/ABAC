@@ -84,8 +84,8 @@ export default function PrivacyPage() {
               stored in our membership database.
             </p>
 
-            <h2>2b. Corporate Membership — business information collection</h2>
-            <p>When a business or organisation applies for Corporate Membership, we collect:</p>
+            <h2>2b. Corporate Partnership — business information collection</h2>
+            <p>When a business or organisation applies for Corporate Partnership, we collect:</p>
             <ul>
               <li>Business name and Australian Business Number (ABN)</li>
               <li>Business website and address — optional</li>
@@ -100,9 +100,9 @@ export default function PrivacyPage() {
             <p>
               <strong>ABN and contact details.</strong> ABN is used only to verify the
               business entity for our records. Contact person’s details are used to send
-              membership confirmations, payment information, and ABAC updates. These fields
+              partnership confirmations, payment information, and ABAC updates. These fields
               are not displayed publicly except for the business name, logo, and website (if
-              provided) on the "Our Partners" page showing approved, active members by tier.
+              provided) on the "Our Partners" page showing approved, active partners by tier.
             </p>
 
             <h2>3. Why we collect it and how we use it</h2>
@@ -131,12 +131,12 @@ export default function PrivacyPage() {
               </li>
             </ul>
             <p>
-              <strong>Corporate membership.</strong> For business sponsorships, we use business
+              <strong>Corporate partnership.</strong> For business sponsorships, we use business
               and contact information to:
             </p>
             <ul>
               <li>
-                Review and approve corporate membership applications under our tiered sponsorship
+                Review and approve corporate partnership applications under our tiered sponsorship
                 framework
               </li>
               <li>Process the sponsorship fee via Stripe and maintain payment records</li>
@@ -148,7 +148,7 @@ export default function PrivacyPage() {
                 Display the business name, logo, and website on the public "Our Partners" page,
                 grouped by sponsorship tier
               </li>
-              <li>Maintain the Register of Corporate Members as required by our governance</li>
+              <li>Maintain the Register of Corporate Partners as required by our governance</li>
             </ul>
             <p>
               We do not use your information for unrelated marketing, and we do not sell or
@@ -170,11 +170,11 @@ export default function PrivacyPage() {
               participation.
             </p>
             <p>
-              <strong>Corporate members.</strong> A sponsoring business's ABN and contact
+              <strong>Corporate partners.</strong> A sponsoring business's ABN and contact
               person's email/phone are visible only to authorised committee members who
               administer corporate sponsorships. The business name, logo, website, and
               sponsorship tier are published on the public "Our Partners" page for approved,
-              active members only.
+              active partners only.
             </p>
 
             <h2>5. Who we share it with</h2>
@@ -216,7 +216,7 @@ export default function PrivacyPage() {
               membership number if you rejoin.
             </p>
             <p>
-              <strong>Corporate members.</strong> We keep a sponsoring business's record for as
+              <strong>Corporate partners.</strong> We keep a sponsoring business's record for as
               long as the sponsorship is active, and for 7 years after it expires or is
               terminated, to meet the same legal recordkeeping obligations and for accounting
               purposes.
@@ -239,7 +239,7 @@ export default function PrivacyPage() {
               </li>
             </ul>
             <p>
-              <strong>Corporate members.</strong> The sponsoring business contact person can:
+              <strong>Corporate partners.</strong> The sponsoring business contact person can:
             </p>
             <ul>
               <li>Request a copy of the business’s sponsorship record</li>
@@ -249,7 +249,7 @@ export default function PrivacyPage() {
             <p>
               To do any of these, email{" "}
               <a href="mailto:bhutancanberra@gmail.com">bhutancanberra@gmail.com</a> with your
-              name (individual member) or business name (corporate member). We’ll respond within
+              name (individual member) or business name (corporate partner). We’ll respond within
               a reasonable time.
             </p>
 

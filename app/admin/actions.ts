@@ -778,7 +778,7 @@ export async function searchVolunteers(query: string): Promise<{ error: string |
 }
 
 // ---------------------------------------------------------------------------
-// Corporate Membership — applications are public (see app/join/actions.ts's
+// Corporate Partnership — applications are public (see app/join/actions.ts's
 // submitCorporateApplication), but approval, payment-link generation, and
 // logo management are admin-only. Approving does not activate the
 // membership by itself — it only emails a Stripe payment link; the Stripe
@@ -814,7 +814,7 @@ export async function approveCorporateMember(id: string) {
         price_data: {
           currency: "aud",
           unit_amount: feeCents,
-          product_data: { name: `ABAC Corporate Membership (${corporateTierLabel(tier)} tier)` },
+          product_data: { name: `ABAC Corporate Partnership (${corporateTierLabel(tier)} tier)` },
         },
         quantity: 1,
       },
@@ -1114,7 +1114,7 @@ export async function createEmailAttachmentUploadUrl(
 
 export type BulkEmailFilter = {
   /** Which table this campaign draws recipients from — community members and
-   *  corporate members are different tables with different fields, so a
+   *  corporate partners are different tables with different fields, so a
    *  campaign always targets exactly one, never a blend of both. */
   audience: "community" | "corporate";
   membershipTypes?: ("single" | "family")[];
@@ -1739,7 +1739,7 @@ export async function getMembersForExport(filter: MembersExportFilter): Promise<
 }
 
 // ---------------------------------------------------------------------------
-// Corporate Members — search, manual add, delete, CSV export, and business
+// Corporate Partners — search, manual add, delete, CSV export, and business
 // certificate viewing. Approve/reject/logo already existed above; these
 // extend the same tab with the same admin-only access model.
 // ---------------------------------------------------------------------------

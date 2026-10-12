@@ -1,7 +1,7 @@
 import { COLOR, escapeHtml, emailShell } from "./shared";
 
 /** Sent to the committee mailbox when a business submits a Corporate
- *  Membership application — replyTo is set to the applicant's contact
+ *  Partnership application — replyTo is set to the applicant's contact
  *  email so replying goes straight to them. */
 export function corporateNotifyEmail({
   businessName,
@@ -16,9 +16,9 @@ export function corporateNotifyEmail({
   phone: string;
   tier: string;
 }) {
-  const subject = `New Corporate Membership application — ${businessName} (${tier})`;
+  const subject = `New Corporate Partnership application — ${businessName} (${tier})`;
 
-  const text = `New Corporate Membership application via the website.
+  const text = `New Corporate Partnership application via the website.
 
 Business: ${businessName}
 Tier: ${tier}
@@ -30,7 +30,7 @@ Review and approve or reject it in the admin dashboard: /admin`;
 
   const body = `
     <p style="margin:0 0 20px;color:${COLOR.ink};font-size:15px">
-      New Corporate Membership application via the website.
+      New Corporate Partnership application via the website.
     </p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid ${COLOR.line};border-radius:8px;margin-bottom:20px">
       <tr>
