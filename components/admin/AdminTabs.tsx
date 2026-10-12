@@ -16,7 +16,7 @@ import type {
   StoryRow,
   DocumentRow,
   VolunteerRow,
-  CorporateMemberRow,
+  CorporatePartnerRow,
   ServiceRequestRow,
   TeamMemberRow,
   MemberRow,
@@ -29,7 +29,7 @@ export default function AdminTabs({
   stories,
   documents,
   volunteers,
-  corporateMembers,
+  corporatePartners,
   serviceRequests,
   teamMembers,
   recentMembers,
@@ -39,14 +39,14 @@ export default function AdminTabs({
   stories: StoryRow[];
   documents: DocumentRow[];
   volunteers: VolunteerRow[];
-  corporateMembers: CorporateMemberRow[];
+  corporatePartners: CorporatePartnerRow[];
   serviceRequests: ServiceRequestRow[];
   teamMembers: TeamMemberRow[];
   recentMembers: MemberRow[];
   memberCount: number;
 }) {
   const [tab, setTab] = useState<Tab>("events");
-  const pendingCorporate = corporateMembers.filter((m) => m.status === "pending").length;
+  const pendingCorporate = corporatePartners.filter((m) => m.status === "pending").length;
 
   return (
     <div>
@@ -85,7 +85,7 @@ export default function AdminTabs({
           className={tab === "corporate" ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"}
           onClick={() => setTab("corporate")}
         >
-          Corporate ({corporateMembers.length}){pendingCorporate > 0 ? ` · ${pendingCorporate} pending` : ""}
+          Corporate ({corporatePartners.length}){pendingCorporate > 0 ? ` · ${pendingCorporate} pending` : ""}
         </button>
         <button
           className={tab === "services" ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"}
@@ -118,7 +118,7 @@ export default function AdminTabs({
       ) : tab === "members" ? (
         <MembersDashboard recentMembers={recentMembers} memberCount={memberCount} />
       ) : tab === "corporate" ? (
-        <CorporateDashboard corporateMembers={corporateMembers} />
+        <CorporateDashboard corporatePartners={corporatePartners} />
       ) : tab === "services" ? (
         <ServiceRequestsDashboard requests={serviceRequests} />
       ) : tab === "team" ? (

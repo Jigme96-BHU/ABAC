@@ -1,15 +1,15 @@
 "use client";
 
 import { useState, useTransition, type FormEvent } from "react";
-import { updateCorporateMember } from "@/app/admin/actions";
-import type { CorporateMemberRow } from "@/lib/supabase/types";
+import { updateCorporatePartner } from "@/app/admin/actions";
+import type { CorporatePartnerRow } from "@/lib/supabase/types";
 
 export default function CorporateEditForm({
   member,
   onDone,
   onCancel,
 }: {
-  member: CorporateMemberRow;
+  member: CorporatePartnerRow;
   onDone: () => void;
   onCancel: () => void;
 }) {
@@ -23,7 +23,7 @@ export default function CorporateEditForm({
 
     startTransition(async () => {
       try {
-        const result = await updateCorporateMember(member.id, {
+        const result = await updateCorporatePartner(member.id, {
           business_name: String(formData.get("business_name") ?? ""),
           abn: String(formData.get("abn") ?? ""),
           website: String(formData.get("website") ?? ""),

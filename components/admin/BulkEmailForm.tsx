@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import {
   sendBulkEmail,
   searchMembers,
-  searchCorporateMembers,
+  searchCorporatePartners,
   createEmailAttachmentUploadUrl,
   type BulkEmailFilter,
 } from "@/app/admin/actions";
@@ -65,7 +65,7 @@ export default function BulkEmailForm() {
     startIndividualSearch(async () => {
       try {
         const res =
-          filter.audience === "corporate" ? await searchCorporateMembers(q) : await searchMembers(q);
+          filter.audience === "corporate" ? await searchCorporatePartners(q) : await searchMembers(q);
         if (res.error) {
           setIndividualResults([]);
           return;

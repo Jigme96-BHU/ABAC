@@ -18,7 +18,7 @@ function isAuthorized(request: Request) {
 type ExpiredStory = { id: string; image_path: string | null; video_path: string | null; gallery_paths: string[] };
 type ExpiredDocument = { id: string; file_path: string | null };
 type ExpiredTeamMember = { id: string; photo_path: string | null };
-type ExpiredCorporateMember = { id: string; logo_path: string | null; business_certificate_path: string | null };
+type ExpiredCorporatePartner = { id: string; logo_path: string | null; business_certificate_path: string | null };
 type ExpiredServiceRequest = {
   id: string;
   passport_path: string | null;
@@ -42,7 +42,7 @@ export async function GET(request: Request) {
   const supabase = await createClient();
   const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-  const [storiesRes, documentsRes, teamMembersRes, corporateMembersRes, serviceRequestsRes] = await Promise.all([
+  const [storiesRes, documentsRes, teamMembersRes, corporatePartnersRes, serviceRequestsRes] = await Promise.all([
     supabase.rpc("get_expired_stories", { p_cutoff: cutoff }),
     supabase.rpc("get_expired_documents", { p_cutoff: cutoff }),
     supabase.rpc("get_expired_team_members", { p_cutoff: cutoff }),
@@ -56,14 +56,14 @@ export async function GET(request: Request) {
   const stories = (storiesRes.data ?? []) as ExpiredStory[];
   const documents = (documentsRes.data ?? []) as ExpiredDocument[];
   const teamMembers = (teamMembersRes.data ?? []) as ExpiredTeamMember[];
-  const corporateMembers = (corporateMembersRes.data ?? []) as ExpiredCorporateMember[];
+  const corporatePartners = (corporatePartnersRes.data ?? []) as ExpiredCorporatePartner[];
   const serviceRequests = (serviceRequestsRes.data ?? []) as ExpiredServiceRequest[];
 
   const counts = {
     stories: stories.length,
     documents: documents.length,
     teamMembers: teamMembers.length,
-    corporateMembers: corporateMembers.length,
+    corporatePartners: corporatePartners.length,
     serviceRequests: serviceRequests.length,
   };
 
@@ -84,7 +84,7 @@ export async function GET(request: Request) {
     ...teamMembers.map((t) =>
       removeStorageObjects(supabase, "team-photos", [storageKeyFromPublicUrl("team-photos", t.photo_path)])
     ),
-    ...corporateMembers.flatMap((c) => [
+    ...corporatePartners.flatMap((c) => [
       removeStorageObjects(supabase, "corporate-logos", [storageKeyFromPublicUrl("corporate-logos", c.logo_path)]),
       // business_certificate_path is already a bare Storage path — that bucket is private.
       removeStorageObjects(supabase, "corporate-documents", [c.business_certificate_path]),

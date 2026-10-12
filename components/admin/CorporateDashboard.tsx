@@ -3,18 +3,18 @@
 import { useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
-  approveCorporateMember,
-  rejectCorporateMember,
+  approveCorporatePartner,
+  rejectCorporatePartner,
   createAdminCorporateLogoUploadUrl,
   recordCorporateLogo,
   removeCorporateLogo,
-  searchCorporateMembers,
-  createCorporateMemberManually,
-  deleteCorporateMember,
-  restoreCorporateMember,
-  permanentlyDeleteCorporateMember,
-  getDeletedCorporateMembers,
-  getCorporateMembersForExport,
+  searchCorporatePartners,
+  createCorporatePartnerManually,
+  deleteCorporatePartner,
+  restoreCorporatePartner,
+  permanentlyDeleteCorporatePartner,
+  getDeletedCorporatePartners,
+  getCorporatePartnersForExport,
   getSignedDocumentUrl,
   hideCorporatePartner,
   type CorporateExportFilter,
@@ -25,16 +25,16 @@ import { CORPORATE_TIERS, corporateTierLabel, type CorporateTier } from "@/lib/c
 import { usePendingDelete } from "@/lib/usePendingDelete";
 import RecentlyDeleted from "./RecentlyDeleted";
 import CorporateEditForm from "./CorporateEditForm";
-import type { CorporateMemberRow } from "@/lib/supabase/types";
+import type { CorporatePartnerRow } from "@/lib/supabase/types";
 
-const STATUS_LABEL: Record<CorporateMemberRow["status"], string> = {
+const STATUS_LABEL: Record<CorporatePartnerRow["status"], string> = {
   pending: "Pending review",
   approved: "Approved — awaiting payment",
   active: "Active",
   rejected: "Rejected",
 };
 
-const EXPORT_COLUMNS: CsvColumn<CorporateMemberRow>[] = [
+const EXPORT_COLUMNS: CsvColumn<CorporatePartnerRow>[] = [
   { header: "Business name", value: (m) => m.business_name },
   { header: "ABN", value: (m) => m.abn ?? "" },
   { header: "Tier", value: (m) => corporateTierLabel(m.tier) },
@@ -48,7 +48,7 @@ const EXPORT_COLUMNS: CsvColumn<CorporateMemberRow>[] = [
   { header: "Expires", value: (m) => (m.expires_at ? new Date(m.expires_at).toLocaleDateString("en-AU") : "") },
 ];
 
-export default function CorporateDashboard({ corporateMembers }: { corporateMembers: CorporateMemberRow[] }) {
+export default function CorporateDashboard({ corporatePartners }: { corporatePartners: CorporatePartnerRow[] }) {
   const [view, setView] = useState<"list" | "search" | "add" | "export">("list");
 
   return (
@@ -69,7 +69,7 @@ export default function CorporateDashboard({ corporateMembers }: { corporateMemb
       </div>
 
       {view === "list" ? (
-        <CorporateTable members={corporateMembers} />
+        <CorporateTable members={corporatePartners} />
       ) : view === "search" ? (
         <CorporateSearchView />
       ) : view === "add" ? (
@@ -80,11 +80,11 @@ export default function CorporateDashboard({ corporateMembers }: { corporateMemb
 
       <RecentlyDeleted
         fetchDeleted={async () => {
-          const res = await getDeletedCorporateMembers();
+          const res = await getDeletedCorporatePartners();
           return { error: res.error, items: res.members };
         }}
-        onRestore={restoreCorporateMember}
-        onPermanentDelete={permanentlyDeleteCorporateMember}
+        onRestore={restoreCorporatePartner}
+        onPermanentDelete={permanentlyDeleteCorporatePartner}
         getLabel={(m) => m.business_name}
         getDeletedAt={(m) => m.deleted_at ?? m.updated_at}
         noun="corporate partners"
@@ -93,11 +93,11 @@ export default function CorporateDashboard({ corporateMembers }: { corporateMemb
   );
 }
 
-function CorporateTable({ members }: { members: CorporateMemberRow[] }) {
+function CorporateTable({ members }: { members: CorporatePartnerRow[] }) {
   const [pending, startTransition] = useTransition();
   const [rowError, setRowError] = useState<Record<string, string>>({});
   const [busyPath, setBusyPath] = useState<string | null>(null);
-  const [editing, setEditing] = useState<CorporateMemberRow | null>(null);
+  const [editing, setEditing] = useState<CorporatePartnerRow | null>(null);
   const { pendingId: pendingDeleteId, start: startDelete, cancel: cancelDelete } = usePendingDelete();
   const router = useRouter();
 
@@ -114,12 +114,12 @@ function CorporateTable({ members }: { members: CorporateMemberRow[] }) {
     });
   }
 
-  function handleApprove(m: CorporateMemberRow) {
+  function handleApprove(m: CorporatePartnerRow) {
     if (!confirm(`Approve ${m.business_name}'s application? This emails them a Stripe payment link.`)) return;
     clearRowError(m.id);
     startTransition(async () => {
       try {
-        const result = await approveCorporateMember(m.id);
+        const result = await approveCorporatePartner(m.id);
         if (result.error) {
           setRowError((prev) => ({ ...prev, [m.id]: result.error! }));
           return;
@@ -131,12 +131,12 @@ function CorporateTable({ members }: { members: CorporateMemberRow[] }) {
     });
   }
 
-  function handleReject(m: CorporateMemberRow) {
+  function handleReject(m: CorporatePartnerRow) {
     if (!confirm(`Reject ${m.business_name}'s application? They'll receive an email notifying them.`)) return;
     clearRowError(m.id);
     startTransition(async () => {
       try {
-        const result = await rejectCorporateMember(m.id);
+        const result = await rejectCorporatePartner(m.id);
         if (result.error) {
           setRowError((prev) => ({ ...prev, [m.id]: result.error! }));
           return;
@@ -148,13 +148,13 @@ function CorporateTable({ members }: { members: CorporateMemberRow[] }) {
     });
   }
 
-  function handleDelete(m: CorporateMemberRow) {
+  function handleDelete(m: CorporatePartnerRow) {
     if (!confirm(`Delete ${m.business_name}'s record permanently?`)) return;
     clearRowError(m.id);
     startDelete(m.id, () => {
       startTransition(async () => {
         try {
-          const result = await deleteCorporateMember(m.id);
+          const result = await deleteCorporatePartner(m.id);
           if (result.error) {
             setRowError((prev) => ({ ...prev, [m.id]: result.error! }));
             return;
@@ -221,7 +221,7 @@ function CorporateTable({ members }: { members: CorporateMemberRow[] }) {
     });
   }
 
-  function handleToggleHidden(m: CorporateMemberRow) {
+  function handleToggleHidden(m: CorporatePartnerRow) {
     clearRowError(m.id);
     startTransition(async () => {
       try {
@@ -385,7 +385,7 @@ function CorporateTable({ members }: { members: CorporateMemberRow[] }) {
 
 function CorporateSearchView() {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<CorporateMemberRow[]>([]);
+  const [results, setResults] = useState<CorporatePartnerRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -394,7 +394,7 @@ function CorporateSearchView() {
     setError(null);
     startTransition(async () => {
       try {
-        const res = await searchCorporateMembers(query);
+        const res = await searchCorporatePartners(query);
         if (res.error) {
           setError(res.error);
           return;
@@ -443,7 +443,7 @@ function CorporateAddForm({ onDone }: { onDone: () => void }) {
     formData.set("tier", tier);
     startTransition(async () => {
       try {
-        const result = await createCorporateMemberManually(formData);
+        const result = await createCorporatePartnerManually(formData);
         if (result.error) {
           setError(result.error);
           return;
@@ -540,7 +540,7 @@ function CorporateExportView() {
     });
   }
 
-  function toggleStatus(status: CorporateMemberRow["status"]) {
+  function toggleStatus(status: CorporatePartnerRow["status"]) {
     setFilter((f) => {
       const current = f.statuses ?? [];
       const statuses = current.includes(status) ? current.filter((s) => s !== status) : [...current, status];
@@ -552,7 +552,7 @@ function CorporateExportView() {
     setMessage(null);
     startTransition(async () => {
       try {
-        const res = await getCorporateMembersForExport(filter);
+        const res = await getCorporatePartnersForExport(filter);
         if (res.error) {
           setMessage(`Couldn't export: ${res.error}`);
           return;

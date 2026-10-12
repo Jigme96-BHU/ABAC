@@ -8,7 +8,7 @@ import type {
   StoryRow,
   DocumentRow,
   VolunteerRow,
-  CorporateMemberRow,
+  CorporatePartnerRow,
   ServiceRequestRow,
   TeamMemberRow,
   MemberRow,
@@ -95,7 +95,7 @@ export default async function AdminPage() {
     storiesResult,
     documentsResult,
     volunteersResult,
-    corporateMembersResult,
+    corporatePartnersResult,
     serviceRequestsResult,
     teamMembersResult,
     membersResult,
@@ -123,7 +123,7 @@ export default async function AdminPage() {
       .select("*")
       .is("deleted_at", null)
       .order("created_at", { ascending: false })
-      .returns<CorporateMemberRow[]>(),
+      .returns<CorporatePartnerRow[]>(),
     supabase
       .from("service_requests")
       .select("*")
@@ -155,7 +155,7 @@ export default async function AdminPage() {
   const stories = settle(storiesResult, "stories");
   const documents = settle(documentsResult, "documents");
   const volunteers = settle(volunteersResult, "volunteers");
-  const corporateMembers = settle(corporateMembersResult, "corporate_members");
+  const corporatePartners = settle(corporatePartnersResult, "corporate_members");
   const serviceRequests = settle(serviceRequestsResult, "service_requests");
   const teamMembers = settle(teamMembersResult, "team_members");
   const members = settle(membersResult, "members");
@@ -187,7 +187,7 @@ export default async function AdminPage() {
             stories={stories ?? []}
             documents={documents ?? []}
             volunteers={volunteers ?? []}
-            corporateMembers={corporateMembers ?? []}
+            corporatePartners={corporatePartners ?? []}
             serviceRequests={serviceRequests ?? []}
             teamMembers={teamMembers ?? []}
             recentMembers={members ?? []}
