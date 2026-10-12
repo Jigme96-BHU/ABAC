@@ -627,7 +627,7 @@ export async function checkMembershipStatus(formData: FormData): Promise<StatusR
 // ---------------------------------------------------------------------------
 // Corporate Partnership — Diamond / Platinum / Gold. Unlike Single/Family,
 // this is never self-serve: an application goes to 'pending' and waits for
-// committee approval (see app/admin/actions.ts's approveCorporateMember)
+// committee approval (see app/admin/actions.ts's approveCorporatePartner)
 // before any payment happens. See supabase/migrations/0012_corporate_membership.sql.
 // ---------------------------------------------------------------------------
 

@@ -19,7 +19,7 @@ import type {
   TeamMemberRow,
   MemberRow,
   ServiceRequestRow,
-  CorporateMemberRow,
+  CorporatePartnerRow,
   VolunteerRow,
 } from "@/lib/supabase/types";
 
@@ -793,7 +793,7 @@ const CORPORATE_LOGO_EXT_BY_TYPE: Record<string, string> = {
   "image/svg+xml": "svg",
 };
 
-export async function approveCorporateMember(id: string) {
+export async function approveCorporatePartner(id: string) {
   const supabase = await createClient();
   const { data: member, error: fetchError } = await supabase
     .from("corporate_members")
@@ -850,7 +850,7 @@ export async function approveCorporateMember(id: string) {
   return { error: null };
 }
 
-export async function rejectCorporateMember(id: string) {
+export async function rejectCorporatePartner(id: string) {
   const supabase = await createClient();
   const { data: member, error: fetchError } = await supabase
     .from("corporate_members")
@@ -1751,21 +1751,21 @@ export async function getMembersForExport(filter: MembersExportFilter): Promise<
  *  containing a comma would prematurely split the `.or()` DSL into extra,
  *  malformed clauses. Four independent ilike queries have no such failure
  *  mode regardless of what characters the query contains. */
-export async function searchCorporateMembers(query: string): Promise<{ error: string | null; results: CorporateMemberRow[] }> {
+export async function searchCorporatePartners(query: string): Promise<{ error: string | null; results: CorporatePartnerRow[] }> {
   const q = query.trim();
   if (!q) return { error: null, results: [] };
   const escaped = q.replace(/[%_]/g, "\\$&");
 
   const supabase = await createClient();
   const lookups = (["business_name", "contact_name", "email", "abn"] as const).map((column) =>
-    supabase.from("corporate_members").select("*").is("deleted_at", null).ilike(column, `%${escaped}%`).limit(50).returns<CorporateMemberRow[]>()
+    supabase.from("corporate_members").select("*").is("deleted_at", null).ilike(column, `%${escaped}%`).limit(50).returns<CorporatePartnerRow[]>()
   );
 
   const responses = await Promise.all(lookups);
   const failed = responses.find((r) => r.error);
   if (failed?.error) return { error: failed.error.message, results: [] };
 
-  const merged = new Map<string, CorporateMemberRow>();
+  const merged = new Map<string, CorporatePartnerRow>();
   for (const r of responses) {
     for (const row of r.data ?? []) merged.set(row.id, row);
   }
@@ -1801,10 +1801,10 @@ export type CorporateEditableFields = {
  *  status is driven by the Approve/Reject workflow buttons — changing
  *  either here would desync the record from what was actually charged or
  *  decided. */
-export async function updateCorporateMember(
+export async function updateCorporatePartner(
   id: string,
   input: CorporateEditableFields
-): Promise<{ error: string | null; member: CorporateMemberRow | null }> {
+): Promise<{ error: string | null; member: CorporatePartnerRow | null }> {
   const businessName = input.business_name.trim();
   const contactName = input.contact_name.trim();
   const email = input.email.trim();
@@ -1835,14 +1835,14 @@ export async function updateCorporateMember(
     })
     .eq("id", id)
     .select()
-    .single<CorporateMemberRow>();
+    .single<CorporatePartnerRow>();
   if (error) return { error: error.message, member: null };
 
   revalidatePath("/admin");
   return { error: null, member: data };
 }
 
-export async function createCorporateMemberManually(formData: FormData): Promise<{ error: string | null }> {
+export async function createCorporatePartnerManually(formData: FormData): Promise<{ error: string | null }> {
   const businessName = String(formData.get("business_name") ?? "").trim();
   const abn = String(formData.get("abn") ?? "").trim();
   const website = String(formData.get("website") ?? "").trim();
@@ -1879,7 +1879,7 @@ export async function createCorporateMemberManually(formData: FormData): Promise
   return { error: null };
 }
 
-export async function deleteCorporateMember(id: string): Promise<{ error: string | null }> {
+export async function deleteCorporatePartner(id: string): Promise<{ error: string | null }> {
   const supabase = await createClient();
   const { error } = await supabase.from("corporate_members").update({ deleted_at: nowIso() }).eq("id", id);
   if (error) return { error: error.message };
@@ -1888,7 +1888,7 @@ export async function deleteCorporateMember(id: string): Promise<{ error: string
   return { error: null };
 }
 
-export async function restoreCorporateMember(id: string): Promise<{ error: string | null }> {
+export async function restoreCorporatePartner(id: string): Promise<{ error: string | null }> {
   const supabase = await createClient();
   const { error } = await supabase.from("corporate_members").update({ deleted_at: null }).eq("id", id);
   if (error) return { error: error.message };
@@ -1897,7 +1897,7 @@ export async function restoreCorporateMember(id: string): Promise<{ error: strin
   return { error: null };
 }
 
-export async function permanentlyDeleteCorporateMember(id: string): Promise<{ error: string | null }> {
+export async function permanentlyDeleteCorporatePartner(id: string): Promise<{ error: string | null }> {
   const supabase = await createClient();
   const { data: member } = await supabase
     .from("corporate_members")
@@ -1921,14 +1921,14 @@ export async function permanentlyDeleteCorporateMember(id: string): Promise<{ er
   return { error: null };
 }
 
-export async function getDeletedCorporateMembers(): Promise<{ error: string | null; members: CorporateMemberRow[] }> {
+export async function getDeletedCorporatePartners(): Promise<{ error: string | null; members: CorporatePartnerRow[] }> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("corporate_members")
     .select("*")
     .not("deleted_at", "is", null)
     .order("deleted_at", { ascending: false })
-    .returns<CorporateMemberRow[]>();
+    .returns<CorporatePartnerRow[]>();
   if (error) return { error: error.message, members: [] };
   return { error: null, members: data ?? [] };
 }
@@ -1939,9 +1939,9 @@ export type CorporateExportFilter = {
   dateRange?: { start: string; end: string };
 };
 
-export async function getCorporateMembersForExport(
+export async function getCorporatePartnersForExport(
   filter: CorporateExportFilter
-): Promise<{ error: string | null; rows: CorporateMemberRow[] }> {
+): Promise<{ error: string | null; rows: CorporatePartnerRow[] }> {
   const supabase = await createClient();
   let query = supabase.from("corporate_members").select("*").is("deleted_at", null).order("created_at", { ascending: false });
 
@@ -1950,7 +1950,7 @@ export async function getCorporateMembersForExport(
   if (filter.dateRange?.start) query = query.gte("created_at", filter.dateRange.start);
   if (filter.dateRange?.end) query = query.lte("created_at", filter.dateRange.end);
 
-  const { data, error } = await query.returns<CorporateMemberRow[]>();
+  const { data, error } = await query.returns<CorporatePartnerRow[]>();
   if (error) return { error: error.message, rows: [] };
   return { error: null, rows: data ?? [] };
 }

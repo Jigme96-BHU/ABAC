@@ -104,7 +104,7 @@ export type VolunteerRow = {
 };
 
 /** Shape of a row from the `corporate_members` table (supabase/migrations/0012_corporate_membership.sql). */
-export type CorporateMemberRow = {
+export type CorporatePartnerRow = {
   id: string;
   business_name: string;
   abn: string | null;
